@@ -1,61 +1,19 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # TFG: AMEX Default Prediction
 
-# [ https://www.kaggle.com/competitions/amex-default-prediction/overview ]
-# 
-# [comment]: <> (Whether out at a restaurant or buying tickets to a concert, modern life counts on the convenience of a credit card to make daily purchases. It saves us from carrying large amounts of cash and also can advance a full purchase that can be paid over time. How do card issuers know we’ll pay back what we charge? That’s a complex problem with many existing solutions—and even more potential improvements, to be explored in this competition.
-# 
-# Credit default prediction is central to managing risk in a consumer lending business. Credit default prediction allows lenders to optimize lending decisions, which leads to a better customer experience and sound business economics. Current models exist to help manage risk. But it's possible to create better models that can outperform those currently in use.
-# 
-# American Express is a globally integrated payments company. The largest payment card issuer in the world, they provide customers with access to products, insights, and experiences that enrich lives and build business success.
-# 
-# __The objective is to predict the probability that a customer does not pay back their credit card balance amount in the future based on their monthly customer profile__. You’ll apply your machine learning skills to predict credit default. Specifically, you will leverage an industrial scale data set to build a machine learning model that challenges the current model in production. Training, validation, and testing datasets include time-series behavioral data and anonymized customer profile information. You're free to explore any technique to create the most powerful model, from creating features to using the data in a more organic way within a model.)
-
-# **El objetivo de este proyecto es predecir la probabilidad de que un cliente  no pague el importe de su tarjeta de crédito en el futuro basado en su perfil mensual**. La variable objetivo es binaria y se calcula observando una ventana de actuación de 18 meses tras el último extracto de la tarjeta de crédito, y si el cliente no paga el importe adeudado en los 120 días posteriores a la fecha de su último extracto se considera un evento de impago.
-# 
-# El conjunto de datos contiene características de perfil agregadas para cada cliente en cada fecha de extracto. Las características están anonimizadas y normalizadas, y se clasifican en las siguientes categorías generales:
-# 
-# - __D_*__ = Delinquency variables (variables de delincuencia)
-# - __S_*__ = Spend variables (variables de gasto)
-# - __P_*__ = Payment variables (variables de pago)
-# - __B_*__ = Balance variables (variables de balance)
-# - __R_*__ = Risk variables (variables de riesgo)
-# 
-# siendo las siguientes características categóricas:
-# 
-# `['B_30', 'B_38', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126', 'D_63', 'D_64', 'D_66', 'D_68']`.
-# 
-# El objetivo es, por tanto, predecir para cada `customer_ID` la probabilidad de un futuro impago (`target = 1`)
-# 
-# - Note that the negative class has been subsampled for this dataset at 5%, and thus receives a 20x weighting in the scoring metric.
-# 
-# Disponemos de las siguientes bases de datos:
-# 
-# - __train_data.csv__ - datos de entrenamiento con múltiples fechas de extractos por `customer_ID`
-# - __train_labels.csv__ - etiqueta objetivo (`target` label) para cada `customer_ID`
-# - __test_data.csv__ - datos de prueba; su objetivo es predecir la etiqueta objetivo para cada `customer_ID`
-# - __sample_submission.csv__ - un archivo de presentación de muestra en el formato correcto
-
-# ## **Análisis descriptivo de los datos**
-
-# Comenzamos, a continuación, con el análisis descriptivo. Para ello, importamos en primer lugar algunas librerías básicas.
-
-# In[1]:
-
-
-#conda install -c conda-forge imbalanced-learn
-
-
-# In[1]:
-
+# In[1]: Import libraries
 
 import pandas as pd 
+import numpy as np
+
 import matplotlib as mpl  
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
 import imblearn
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import StratifiedKFold 
@@ -69,82 +27,65 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-# A la hora de cargar los datasets, como son tan grandes (16 GB entrenamiento, 30 GB test), vamos a tener problemas de memoria y no vamos a lograr cargarlos. En Kaggle un par de usuarios han preprocesado la base original y han subido 2 alternativas para evitar los problemas de memoria:
-# 
-# - La primera (https://www.kaggle.com/datasets/munumbutt/amexfeather) cambia el formato de los datos, dejando de lado el _csv_ y transformándolos al formato _feather_ (más información sobre ese formato aquí: https://arrow.apache.org/docs/python/feather.html). Básicamente lo que hace es comprimir los datos. El problema es que los datos ahora están en 16 bits, por lo que se pierde algo de información (_Every float16 number between 1 and 2 is a multiple of 1/1024. These numbers have only three digits behind the decimal point!_).
-# 
-# - La segunda (https://www.kaggle.com/competitions/amex-default-prediction/discussion/328514) emplea una técnica similar y emplea el formato _parquet_. Además, elimina un ruido artificial de [0,0.01] que hay presente en todas las "float type columns". Transforma, cuando es posible todos los datos de tipo _float_ en datos de tipo _int_. No entiendo muy bien lo del ruido, pero parece que las mejores propuestas de código empiezan eliminándolo.
+# In[2]: Read data
 
-# In[2]:
-
-
-# Cargamos los datos
-#datos_train = pd.read_csv("train_data.csv", sep = ',')
-#datos_train_labels = pd.read_csv("train_labels.csv", sep = ',')
-
-# Hacemos una copia de los datos para que las modificaciones que hagamos no afecten al dataset original
-#datos_train_original = datos_train.copy() 
-#datos_train_labels_original = datos_train_labels.copy() 
-
-
-# In[3]:
-
-
-#from google.colab import drive
-
-#drive.mount('/content/drive')  
-
-
-# In[4]:
-
-
-get_ipython().run_line_magic('run', '"funciones_auxiliares.ipynb"')
-import funciones_auxiliares 
-
-
-# In[5]:
-
-
-#pip install pyarrow
-
-
-# Esta versión utiliza [este dataset](https://www.kaggle.com/competitions/amex-default-prediction/discussion/328514) (la segunda opción listada anteriormente), el cual no solo disminuye el tamaño de la base sino que también elimina el ruido artificial presente en los datos, sin pérdida de información. Además, convierte los NA en -1 y, según el autor, no debería influir en los modelos.
-# 
-# 
-# ```
-#  This helps to reverse -1 to NA by just simply x[x==-1] = np.nan
-# ```
-# 
-# El csv con los labels no está pero entiendo que hay que usar el original. Además, se ventila la variable target, aunque la variable target de train del csv original coincide con la variable target de train_labels.csv, por lo que podemos hacer un merge y recuperarla. 
-# 
-# > Más información acerca del ruido: https://www.kaggle.com/code/raddar/the-data-has-random-uniform-noise-added
-# 
-
-# In[6]:
-
-
+# Train
 train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
-#train = train.groupby('customer_ID').tail(1).set_index('customer_ID')
-#train[train==-1] = np.nan # revert -1 to na encoding as in the original dataset
-train
+
+# Labels
+train_labels = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/train_labels.csv', low_memory=False)
+
+# Train + Labels
+train_raw = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
+train_raw = train_raw.drop(columns = ['customer_ID', 'S_2'])
+
+# Clear memory train_labels
+del train_labels
+# del train
+
+# Test
+test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
+test_data = test_data.drop(columns = ['customer_ID', 'S_2'])
 
 
-# In[7]:
+# In[3]: Data overview
+
+"""
+The dataset contains aggregated profile features for each customer at each statement date. Features are anonymized and normalized, 
+and fall into the following general categories:
+
+D_* = Delinquency variables
+S_* = Spend variables
+P_* = Payment variables
+B_* = Balance variables
+R_* = Risk variables
+
+with the following features being categorical:
+    
+    ['B_30', 'B_38', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126', 'D_63', 'D_64', 'D_66', 'D_68']
+"""
+
+# Categorical features
+categorical_features = ['B_30', 'B_38', 'D_63', 'D_64', 'D_66', 'D_68', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126']
+
+# Data shape (train)
+print("We have %d records and %d features in train dataset." % (train.shape[0], train.shape[1]))
+
+# Data shape (test)
+print("We have %d records and %d features in test dataset." % (test_data.shape[0], test_data.shape[1]))
+
+# No. of unique customers in train and test datasets
+print(f'Those {train.shape[0]} records do not belong to a single client each, but there are multiple obsevations for each client \
+       one for each transaction date. In particular, we have {train["customer_ID"].nunique()} clients in train dataset \
+       and {test_data["customer_ID"].nunique()} clients in test dataset.')
+
+# Date range for train and test datasets
+print(f'The date range for the train dataset is from {train["S_2"].min()} to {train["S_2"].max()} \
+         and for the test dataset is from {test_data["S_2"].min()} to {test_data["S_2"].max()}. \
+         This means that the dates of train and test do not overlap')
 
 
-# Dimensión de los datos (train)
-print("Tenemos %d observaciones y %d variables." % (train.shape[0], train.shape[1]))
-
-
-# Como la base es tan grande, tenemos problemas de memoria. Una opción es separar en 2 notebooks distintos train y test.
-
-# In[8]:
-
-
-print(f'Esas 5531451 no corresponden cada una a un cliente, sino que cada cliente tiene varias observaciones que hacen referencia a la fecha de transacción. En concreto, tenemos este número de clientes: {train["customer_ID"].nunique()}')
-
-
-# In[9]:
+# In[4]: Exploratory data analysis (EDA)
 
 
 #test = pd.read_feather('/content/drive/MyDrive/TFG/feather_ds/test_data.ftr').set_index('customer_ID')
@@ -314,8 +255,6 @@ print(f'La línea temporal de los datos de entrenamiento va desde {train_raw["S_
 
 # In[30]:
 
-
-categorical_features = ['B_30', 'B_38', 'D_63', 'D_64', 'D_66', 'D_68', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126']
 train_raw[categorical_features] = train_raw[categorical_features].astype("category")
 train_raw[categorical_features].dtypes
 
