@@ -37,9 +37,9 @@ train_labels = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default
 
 # Train + Labels
 train_raw = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
-train_raw = train_raw.drop(columns = ['customer_ID', 'S_2'])
+# train_raw = train_raw.drop(columns = ['customer_ID']) #, 'S_2'])
 
-# Clear memory train_labels
+# Clear memory: train_labels
 del train_labels
 # del train
 
@@ -63,6 +63,8 @@ R_* = Risk variables
 with the following features being categorical:
     
     ['B_30', 'B_38', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126', 'D_63', 'D_64', 'D_66', 'D_68']
+
+and 'S_2' being the date variable.
 """
 
 # Categorical features
@@ -87,10 +89,89 @@ print(f'The date range for the train dataset is from {train["S_2"].min()} to {tr
 
 # In[4]: Exploratory data analysis (EDA)
 
+# One of the first things we should do is have a look at the variables and their types.
 
-#test = pd.read_feather('/content/drive/MyDrive/TFG/feather_ds/test_data.ftr').set_index('customer_ID')
-#test
+train.info(max_cols = 200, show_counts=True)
 
+"""
+- We have 2 variables of type object (date, S_2, and customer_id).
+
+- There are many features with missing values (NaNs). Dropping them would result in a loss of information, 
+so we will have to deal with them later. There are many decission-tree based models that can handle missing values,
+so we won't have to worry about them too much for now.
+
+- If we use regression models, we will have to deal with them.
+"""
+
+
+# In[5]: Exploratory data analysis (EDA) - Target
+
+# Distribution of target variable 
+
+target = train_raw.target.value_counts(normalize=False)
+target.rename(index={1:'Default',0:'Paid'},inplace=True)
+target
+
+target = train_raw.target.value_counts(normalize=True)
+target.rename(index={1:'Default',0:'Paid'},inplace=True)
+target
+
+px.pie(target.index, values = target, names = target.index,  title='Target distribution') 
+
+
+# In[5]: Exploratory data analysis (EDA) - Target (2)
+# Distribution of target variable by date
+
+target_date = train_raw.groupby(['S_2'])['target'].value_counts(normalize=False)
+target_date.rename(index={1:'Default',0:'Paid'},inplace=True)
+target_date = target_date.reset_index(name='count')
+target_date
+
+# We can clearly see that the data is inbalanced, as 75% of the observations are of clients that paid their credit 
+# card bill and 25% from those who default.
+
+# Furthermore, we are given that: "The good customers have been subsampled by a factor of 20; 
+# this means that in reality there are 6.8 million good customers. 98 % of the customers are good; 2 % are bad"
+
+# Plot grouping by month
+
+fig = px.bar(target_date, x="S_2", y="count", color='target', barmode='group', title='Target distribution by date')
+fig.show()
+
+# We can also see that the monthly amount of default is more or less constant.
+
+
+# In[6]: Exploratory data analysis (EDA) - Statements per customer in train dataset
+
+# Pie chart of statements per customer
+
+statements_per_customer = train_raw.groupby(['customer_ID'])['S_2'].nunique()
+statements_per_customer = statements_per_customer.value_counts(normalize=False)
+statements_per_customer = statements_per_customer.reset_index(name='count')
+
+px.pie(statements_per_customer, values = 'count', names = 'index', title='Statements per customer')
+
+# We see that 84% of the customers have 13 statements and the remaining 16% between 1 and 12 statements.
+
+
+# In[6]: Exploratory data analysis (EDA) - Statements per customer in train dataset (2)
+
+# Line graph of number of statements issued daily
+
+statements_per_customer = train_raw.groupby(['S_2'])['customer_ID'].nunique()
+statements_per_customer = statements_per_customer.reset_index(name='count')
+
+px.line(statements_per_customer, x="S_2", y="count", title='Number of statements issued daily', 
+        labels={'count':'Number of statements', 'S_2':'Statement Date'})
+
+# We can see that there is a weekly pattern in the number of statements issued.
+
+
+# In[]: Exploratory data analysis (EDA) - Missing values
+# # We can get a closer look at the missing values.
+
+# print('Number of missing values:\n')
+# train.isnull().sum()
 
 # In[10]:
 
