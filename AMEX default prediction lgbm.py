@@ -40,6 +40,8 @@ train_raw = train_raw.drop(columns = ['customer_ID', 'S_2'])
 # Test
 test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
 test_data = test_data.drop(columns = ['customer_ID', 'S_2'])
+
+
 # In[3]: Tipos de variables
 
 # Recordemos, en primer lugar, que las siguientes variables eran categóricas:
@@ -56,6 +58,7 @@ test_data[categorical_features] = test_data[categorical_features].astype("catego
 features = train.drop(['customer_ID', 'S_2'], axis = 1).columns.to_list()
 # Numerical features
 numerical_features = [col for col in features if col not in categorical_features]
+
 
 # In[4]: Detección de missings
 
@@ -93,6 +96,7 @@ plt.tight_layout()
 plt.show()
 
 del tmp, fig, ax
+
 
 # In[5]: Métrica
 
@@ -143,15 +147,37 @@ def seed_everything(seed):
 train_data_2 = train_raw.copy()
 
 # Codificación de las variables
-enc = LabelEncoder()
-for i in categorical_features:
-    train_data_2[i] = enc.fit_transform(train_data_2[i])
-    test_data[i] = enc.fit_transform(test_data[i])
+# Meto un label encoder por tener menos variables, pero habría que usar onehot porque no sé si existe una relación de orden entre las categorías
+
+# enc = LabelEncoder()
+# for cat_feat in categorical_features:
+#     train_data_2[cat_feat] = enc.fit_transform(train_data_2[cat_feat])
+#     test_data[cat_feat] = enc.transform(test_data[cat_feat])
+
+# Error con label encoder porque hay categorías nuevas en test. Tal vez al agrupar por id pueda solucionarse. Paso a onehot
+
+# Onehot encoding uising sklearn
+
+enc = OneHotEncoder(handle_unknown='ignore')
+# Ajustar y transformar los datos de entrenamiento
+train_oh = enc.fit_transform(train_data_2[categorical_features])
+# Transformar los datos de test
+test_oh = enc.transform(test_data[categorical_features])
+
+# Convertir los datos codificados a un DataFrame y añadir los nombres de las columnas
+train_oh = pd.DataFrame(train_oh.toarray(), columns=enc.get_feature_names_out(categorical_features))
+test_oh = pd.DataFrame(test_oh.toarray(), columns=enc.get_feature_names_out(categorical_features))
+
+# Unir los datos codificados con los datos numéricos
+train_encoded = train_data_2.join(train_oh)
+test_encoded = test_data.join(test_oh)
+
+del train_data_2
 
 # In[8]: Separamos los datos
 
-X = train_data_2.drop(['target'],axis=1)
-y = train_data_2['target']
+X = train_encoded.drop(['target'],axis=1)
+y = train_encoded['target']
 
 # Dividimos los datos en entrenamiento y test (80 training, 20 test)
 X_train, X_test, y_train, y_test = train_test_split(X, y, stratify = y, test_size = .20, random_state = seed, shuffle=True)
@@ -159,11 +185,40 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, stratify = y, test_siz
 print('Datos entrenamiento: ', X_train.shape)
 print('Datos test: ', X_test.shape)
 
-# In[9]: Escalamos (con los datos de train)
-scaler = preprocessing.StandardScaler().fit(X_train)
 
-X_train_scaled = pd.DataFrame(scaler.transform(X_train), columns = X_train.columns, index = X_train.index)
-X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns = X_test.columns, index = X_test.index)
+# In[9]: Parámetros LGBM
+
+# Parámetros LGBM
+
+LGBM_params = {
+                  'objective' : 'binary',
+                  'metric' : 'binary_logloss',
+                  'boosting': 'dart',
+                  'max_depth' : -1,
+                  'num_leaves' : 64,
+                  'learning_rate' : 0.035,
+                  'bagging_freq': 5,
+                  'bagging_fraction' : 0.75,
+                  'feature_fraction' : 0.05,
+                  'min_data_in_leaf': 256,
+                  'max_bin': 63,
+                  'min_data_in_bin': 256,
+                  # 'min_sum_heassian_in_leaf': 10,
+                  'tree_learner': 'serial',
+                  'boost_from_average': 'false',
+                  'lambda_l1' : 0.1,
+                  'lambda_l2' : 30,
+                  'num_threads': -10,
+                  'verbosity' : 1,
+    }
+
+# No es necesario escalar en árboles de decisión
+
+# # In[9]: Escalamos (con los datos de train)
+# scaler = preprocessing.StandardScaler().fit(X_train)
+
+# X_train_scaled = pd.DataFrame(scaler.transform(X_train), columns = X_train.columns, index = X_train.index)
+# X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns = X_test.columns, index = X_test.index)
 
 # In[10]: Imputación de missings
 
@@ -175,51 +230,55 @@ X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns = X_test.columns,
 
 # In[11]: Undersampling
 
-from imblearn.under_sampling import RandomUnderSampler
+# from imblearn.under_sampling import RandomUnderSampler
 
-under_sampler = RandomUnderSampler(random_state = seed)
-X_train_res, y_train_res = under_sampler.fit_resample(X_train_scaled, y_train)
+# under_sampler = RandomUnderSampler(random_state = seed)
+# X_train_res, y_train_res = under_sampler.fit_resample(X_train_scaled, y_train)
 
-# In[12]: LGBM
+
+# In[12]: Hyperparameter tuning
+
+
+# In[13]: LGBM
+
+# Tiempo de inicio
+import time
+start_time = time.time()
 
 # Creamos el dataset de entrenamiento
-lgb_train = lgb.Dataset(X_train_res, y_train_res)
+lgb_train = lgb.Dataset(X_train, y_train, categorical_feature=categorical_features)
 
 # Creamos el dataset de test
-lgb_test = lgb.Dataset(X_test_scaled, y_test)
-
-# Parámetros
-params = {
-    'boosting_type': 'gbdt',
-    'n_estimators': 1000,
-    'num_leaves': 50,
-    'learning_rate': 0.05,
-    'colsample_bytree': 0.9,
-    'min_child_samples': 2000,
-    'max_bins': 500,
-    'reg_alpha': 2,
-    'objective': 'binary',
-    'random_state': 21,
-    'n_jobs': -1,
-    'metric': 'binary_logloss',
-}
+lgb_test = lgb.Dataset(X_test, y_test, categorical_feature=categorical_features)
 
 # Entrenamos el modelo
-model = lgb.train(params, lgb_train, num_boost_round=10000, valid_sets=[lgb_train, lgb_test], verbose_eval=500, early_stopping_rounds=200)
+model_train = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=10000, valid_sets=[lgb_train, lgb_test], 
+                        verbose_eval=100, early_stopping_rounds=100)
+
+# Tiempo de ejecución
+print('Tiempo de ejecución: ', time.time() - start_time)
+
+
 # In[13]: Predicciones
 
+start_time = time.time()
+
 # Predicciones
-y_pred = model.predict(X_test_scaled)
+y_pred = model_train.predict(X_test)
+
+print('Tiempo de ejecución: ', time.time() - start_time)
+
 
 # In[14]: Evaluación usando la métrica
 
 # Evaluación usando la métrica
 # print('Gini: ', amex_metric(y_test, y_pred))
 
-# # In[15]: Predicciones para el test
+# In[15]: Save model
 
-# # Predicciones para el test
-# y_pred_test = model.predict(test_data)
+# Save model
+import pickle
+pickle.dump(model_train, open('model_train.pkl', 'wb'))
 
 # In[16]: Curva ROC de cada fold
 
@@ -252,5 +311,14 @@ sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
 # In[18]: Feature importance
 
 # Feature importance top 50
-lgb.plot_importance(model, max_num_features=50, figsize=(10,10))
+lgb.plot_importance(model_train, max_num_features=50, figsize=(10,10))
+
+
+# In[19]: Metrica Gini
+
+y_pred1=pd.DataFrame(data={'prediction':y_pred})
+y_true1=pd.DataFrame(data={'target':y_test.reset_index(drop=True)})
+
+metric_score = amex_metric(y_true1, y_pred1)
+print('Gini: ', metric_score)
 # %%
