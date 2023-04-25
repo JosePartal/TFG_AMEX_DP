@@ -118,6 +118,12 @@ target
 
 px.pie(target.index, values = target, names = target.index,  title='Target distribution') 
 
+# We can clearly see that the data is inbalanced, as 75% of the observations are of clients that paid their credit 
+# card bill and 25% from those who default.
+
+# Furthermore, we are given that: "The good customers have been subsampled by a factor of 20; 
+# this means that in reality there are 6.8 million good customers. 98 % of the customers are good; 2 % are bad"
+
 
 # In[5]: Exploratory data analysis (EDA) - Target (2)
 # Distribution of target variable by date
@@ -126,12 +132,6 @@ target_date = train_raw.groupby(['S_2'])['target'].value_counts(normalize=False)
 target_date.rename(index={1:'Default',0:'Paid'},inplace=True)
 target_date = target_date.reset_index(name='count')
 target_date
-
-# We can clearly see that the data is inbalanced, as 75% of the observations are of clients that paid their credit 
-# card bill and 25% from those who default.
-
-# Furthermore, we are given that: "The good customers have been subsampled by a factor of 20; 
-# this means that in reality there are 6.8 million good customers. 98 % of the customers are good; 2 % are bad"
 
 # Plot grouping by month
 

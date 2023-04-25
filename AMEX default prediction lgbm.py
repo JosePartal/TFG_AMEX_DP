@@ -4,13 +4,23 @@
 
 # In[1]: Librerías
 
+# Store and organize output files
+
+from pathlib import Path
+
+# Data manipulation
+
 import pandas as pd 
+import numpy as np
+
+# Data visualization
 import matplotlib as mpl  
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
-import imblearn
 import plotly.graph_objects as go
+
+# Machine learning
+import imblearn
 import lightgbm as lgb
 from sklearn import preprocessing
 from sklearn.preprocessing import LabelEncoder
@@ -196,7 +206,7 @@ LGBM_params = {
                   'boosting': 'dart',
                   'max_depth' : -1,
                   'num_leaves' : 64,
-                  'learning_rate' : 0.035,
+                  'learning_rate' : 0.1,
                   'bagging_freq': 5,
                   'bagging_fraction' : 0.75,
                   'feature_fraction' : 0.05,
@@ -208,9 +218,13 @@ LGBM_params = {
                   'boost_from_average': 'false',
                   'lambda_l1' : 0.1,
                   'lambda_l2' : 30,
-                  'num_threads': -10,
+                  'num_threads': -1,
+                  'force_row_wise' : True,
                   'verbosity' : 1,
     }
+
+from lightgbm import callback
+callbacks = [callback.early_stopping(patience=100)]
 
 # No es necesario escalar en árboles de decisión
 
@@ -252,8 +266,8 @@ lgb_train = lgb.Dataset(X_train, y_train, categorical_feature=categorical_featur
 lgb_test = lgb.Dataset(X_test, y_test, categorical_feature=categorical_features)
 
 # Entrenamos el modelo
-model_train = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=10000, valid_sets=[lgb_train, lgb_test], 
-                        verbose_eval=100, early_stopping_rounds=100)
+model_train = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=2000, valid_sets=[lgb_train, lgb_test], 
+                        verbose_eval=100, callbacks=callbacks)
 
 # Tiempo de ejecución
 print('Tiempo de ejecución: ', time.time() - start_time)
