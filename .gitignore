@@ -1,3 +1,5 @@
 MODELOS/
 *.png
 *.pkl
+*.parquet
+*.xlsx
