@@ -42,6 +42,9 @@ from sklearn.ensemble import RandomForestClassifier
 # Saving models
 import pickle
 
+# Feature engineering functions
+import feature_engineering as fe
+
 
 # In[2]: Workspace
 

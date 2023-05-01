@@ -5,11 +5,9 @@
 # In[1]: Librerías
 
 # Store and organize output files
-
 from pathlib import Path
 
 # Data manipulation
-
 import pandas as pd 
 import numpy as np
 
@@ -35,8 +33,16 @@ from imblearn.under_sampling import RandomUnderSampler
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import GridSearchCV 
 from sklearn.metrics import accuracy_score
+
 # Librerías Random Forest
 from sklearn.ensemble import RandomForestClassifier
+
+# Saving models
+import pickle
+
+# Feature engineering functions
+import feature_engineering as fe
+
 
 # In[2]: Lectura de datos
 

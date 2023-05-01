@@ -11,7 +11,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
-import plotly.graph_objects as go
+# import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 import imblearn
@@ -37,7 +37,7 @@ train_labels = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default
 
 # Train + Labels
 train_raw = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
-# train_raw = train_raw.drop(columns = ['customer_ID']) #, 'S_2'])
+# train_raw = train_raw.drop(columns = ['customer_ID']), 'S_2'])
 
 # Clear memory: train_labels
 # del train_labels
@@ -121,7 +121,7 @@ print('Furthermore, we are given that: "The good customers have been subsampled 
 px.pie(target.index, values = target, names = target.index,  title='Target distribution') 
 
 
-# In[5]: Exploratory data analysis (EDA) - Target (2)
+# In[5]: Exploratory data analysis (EDA) - Target distribution by date (2)
 # Distribution of target variable by date
 
 target_date = train_raw.groupby(['S_2'])['target'].value_counts(normalize=False)
@@ -135,6 +135,19 @@ fig = px.bar(target_date, x="S_2", y="Count", color='target', barmode='group', t
 fig.show()
 
 # We can also see that the monthly amount of default is more or less constant.
+
+# In[7]: Exploratory data analysis (EDA) - Daily statements per customer in train dataset
+
+# Line graph of number of statements issued daily
+
+statements_per_customer = train_raw.groupby(['S_2'])['customer_ID'].nunique()
+statements_per_customer = statements_per_customer.reset_index(name='count')
+
+print('We can see that there is a weekly pattern in the number of statements issued. \n \
+       Saturdays have the highest number of statements issued.')
+
+px.line(statements_per_customer, x="S_2", y="count", title='Number of statements issued daily (Train)', 
+        labels={'count':'Number of statements', 'S_2':'Statement Date'})
 
 
 # In[6]: Exploratory data analysis (EDA) - Statements per customer in train dataset
@@ -156,21 +169,7 @@ px.pie(statements_per_customer, values = 'count', names = 'index', title='Statem
 # Customers are issued monthly. Are these statements payments or just the monthly reports?
 
 
-# In[7]: Exploratory data analysis (EDA) - Statements per customer in train dataset (2)
-
-# Line graph of number of statements issued daily
-
-statements_per_customer = train_raw.groupby(['S_2'])['customer_ID'].nunique()
-statements_per_customer = statements_per_customer.reset_index(name='count')
-
-print('We can see that there is a weekly pattern in the number of statements issued. \n \
-       Saturdays have the highest number of statements issued.')
-
-px.line(statements_per_customer, x="S_2", y="count", title='Number of statements issued daily (Train)', 
-        labels={'count':'Number of statements', 'S_2':'Statement Date'})
-
-
-# In[8]: Exploratory data analysis (EDA) - Presence of customers in train dataset (1)
+# In[8]: Exploratory data analysis (EDA) - Presence of customers in train dataset by target (1)
 
 # Bar chart of number of months each customer has been present in the dataset
 
@@ -187,9 +186,9 @@ ax.bar_label(ax.containers[1], fmt='%.f%%')
 plt.show()
 
 
-# In[9]: Exploratory data analysis (EDA) - Presence of customers in train dataset (2)
+# In[9]: Exploratory data analysis (EDA) - Presence of customers in train dataset by target (2)
 
-print('Lets zoom in on the customers that have been present for less than 13 months. \n \
+print('Lets zoom into the customers that have been present for less than 13 months. \n \
       We can see that people that are less than 13 months in the dataset are more likely to default. \n \
       However, we have to be careful with this here we also have late entry customers. \n \
       So we have customers that entered late and customers that dropped out early \n \
@@ -273,6 +272,7 @@ plt.show()
 del tmp, fig, ax, pd_series_null_columns, pd_null_columnas, pd_series_null_columns_test, pd_null_columnas_test
 
 
+
 # In[12]: Exploratory data analysis (EDA) - Missing values (3)
 
 """
@@ -337,10 +337,9 @@ plt.show() #savefig
 del temp
 
 
-# In[15]: Exploratory data analysis (EDA) - Feature distributions (2): Delinquency features
+# In[15]: Exploratory data analysis (EDA) - Feature distributions (2): Spend features
 
-
-# In[16]: Exploratory data analysis (EDA) - Feature distributions (3): Spend features
+# In[16]: Exploratory data analysis (EDA) - Feature distributions (3): Delincuquency features
 
 
 # In[17]: Exploratory data analysis (EDA) - Feature distributions (4): Payment features
@@ -353,6 +352,13 @@ del temp
 
 
 # In[20]: Exploratory data analysis (EDA) - Correlations (1): With target variable
+
+# Correlation with target variable using heatmap
+plt.figure(figsize=(16, 16))
+sns.heatmap(train[numerical_features + ['target']].corr(), annot=True, fmt='.2f', cmap='coolwarm')
+plt.title('Correlation with target variable', fontsize=20)
+plt.show() #savefig
+
 
 
 # In[21]: Exploratory data analysis (EDA) - Correlations (2): Among Delinquency features
