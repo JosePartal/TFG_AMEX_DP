@@ -375,3 +375,9 @@ plt.show() #savefig
 
 # In[25]: Exploratory data analysis (EDA) - Correlations (6): Among Risk features
 
+
+# In[]: Binary feaatures
+
+# Code for identifying binary features (only takes value 0 or 1)
+# binary_features = [col for col in features if train[col].nunique() == 2]
+# print(f'{len(binary_features)} binary features: {binary_features}\n')
