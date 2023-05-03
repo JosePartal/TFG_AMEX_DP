@@ -9,8 +9,35 @@ import numpy as np
 # Store and organize output files
 from pathlib import Path
 
+# Saving models
+import pickle
 
-# In[2]: Feature engineering functions I: Feature types
+# Time management
+import time
+
+
+# In[2]: Utility functions I: Model saving
+
+def save_model(algorithm: str, model):
+    # Create a directory to store the output files
+    results_path = Path('./MODELOS')
+    results_path.mkdir(exist_ok=True)
+
+    # Name experiment algorithm + current time
+    experiment_name = algorithm + '_' + time.strftime('%Y%m%d_%H%M%S')
+    experiment_dir = results_path / experiment_name
+    experiment_dir.mkdir(exist_ok=True)
+
+    print(f'Saving model in {experiment_dir}')
+
+    # Save model
+    with open(experiment_dir / 'model.pkl', 'wb') as file:
+        pickle.dump(model, file)
+
+    print('Model saved successfully')
+
+
+# In[3]: Feature engineering functions I: Feature types
 
 def feature_types(df):
     not_used = ['customer_ID', 'S_2'] # and target
@@ -28,7 +55,7 @@ def feature_types(df):
     return not_used, cat_features, bin_features_1, bin_features_2, bin_features_3, num_features #, features
 
 
-# In[3]: Feature engineering functions II: Dummy encoding
+# In[4]: Feature engineering functions II: Dummy encoding
 
 """Before creating new variables, we need to encode the categorical features.
 If we dummy encode them we will have k-1 new features for each categorical feature instead of k,
@@ -49,7 +76,7 @@ def dummy_encoding(train_df, test_df, cat_features):
 
 
 
-# In[4]: Feature engineering functions III: Aggregations
+# In[5]: Feature engineering functions III: Aggregations
 
 """
 Providing the models with group statistics (mean, std, max, min, etc.) in the form of new features
@@ -72,25 +99,25 @@ def feat_aggregations(df, cat_features, num_features, groupby_var):
     # df_cat_agg = df_cat_agg.reset_index(inplace = True)
     # df_num_agg = df_num_agg.reset_index(inplace = True)
 
-    # Merge the aggregated features with the original dataset
-    df = df.merge(df_cat_agg, on = groupby_var, how = 'inner')
-    df = df.merge(df_num_agg, on = groupby_var, how = 'inner')
+    # Concat the aggregated features
+    df = pd.concat([df_cat_agg, df_num_agg], axis = 1)
 
     del df_cat_agg, df_num_agg
     return df
+
     
-# In[5]: data
-train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
-test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
+# # In[6]: data
+# train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
+# test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
 
-# In[6]: tests
+# # In[7]: tests
 
-not_used, cat_features, bin_features_1, bin_features_2, bin_features_3, num_features = feature_types(train)
+# not_used, cat_features, bin_features_1, bin_features_2, bin_features_3, num_features = feature_types(train)
 
-train_oh, test_oh, list_dummies_train, list_dummies_test = dummy_encoding(train, test_data, cat_features)
+# train_oh, test_oh, list_dummies_train, list_dummies_test = dummy_encoding(train, test_data, cat_features)
 
-# %%
+# # %%
 
-train_agg = feat_aggregations(train_oh, list_dummies_train, num_features, 'customer_ID')
-train_agg
+# train_agg = feat_aggregations(train_oh, list_dummies_train, num_features, 'customer_ID')
+# train_agg
 # %%

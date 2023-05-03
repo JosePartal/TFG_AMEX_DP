@@ -67,10 +67,10 @@ train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-pr
 train_labels = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/train_labels.csv', low_memory=False)
 # Train + Labels
 train_raw = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
-train_raw = train_raw.drop(columns = ['customer_ID', 'S_2'])
+# train_raw = train_raw.drop(columns = ['customer_ID', 'S_2'])
 # Test
 test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
-test_data = test_data.drop(columns = ['customer_ID', 'S_2'])
+# test_data = test_data.drop(columns = ['customer_ID', 'S_2'])
 
 
 # In[3]: Tipos de variables
