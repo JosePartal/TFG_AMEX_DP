@@ -14,6 +14,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.graph_objects as go
+import gc
 
 # Time management
 import time
@@ -46,19 +47,6 @@ import pickle
 import feature_engineering as fe
 
 
-# In[2]: Workspace
-
-# Create a directory to store the output files
-
-results_path = Path('./MODELOS')
-results_path.mkdir(exist_ok=True)
-
-# Name experiment XGBoost + current time
-
-experiment_name = 'XGBoost' + '_' + time.strftime('%Y%m%d_%H%M%S')
-experiment_dir = results_path / experiment_name
-experiment_dir.mkdir(exist_ok=True)
-
 # In[2]: Lectura de datos
 
 # Train
@@ -66,7 +54,7 @@ train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-pr
 # Labels
 train_labels = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/train_labels.csv', low_memory=False)
 # Train + Labels
-train_raw = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
+# train_raw = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
 # train_raw = train_raw.drop(columns = ['customer_ID', 'S_2'])
 # Test
 test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
@@ -75,20 +63,7 @@ test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-defaul
 
 # In[3]: Tipos de variables
 
-# Recordemos, en primer lugar, que las siguientes variables eran categóricas:
-
-# `['B_30', 'B_38', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126', 'D_63', 'D_64', 'D_66', 'D_68']`
-
-# Y `[S_2]` es una variable temporal.
-
-# Variables categóricas
-categorical_features = ['B_30', 'B_38', 'D_63', 'D_64', 'D_66', 'D_68', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126']
-train_raw[categorical_features] = train_raw[categorical_features].astype("category")
-test_data[categorical_features] = test_data[categorical_features].astype("category")
-
-features = train.drop(['customer_ID', 'S_2'], axis = 1).columns.to_list()
-# Numerical features
-numerical_features = [col for col in features if col not in categorical_features]
+not_used, cat_features, bin_features_1, bin_features_2, bin_features_3, num_features = fe.feature_types(train)
 
 
 # In[4]: Métrica
@@ -127,38 +102,25 @@ def amex_metric(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
 
 # In[5]: Codificación de las variables
 
-# Creamos una copia de train_data para trabajar con ella
-train_data_2 = train_raw.copy()
+# Dummy encoding
 
-# Onehot encoding uising sklearn
-
-enc = OneHotEncoder(handle_unknown='ignore')
-# Ajustar y transformar los datos de entrenamiento
-train_oh = enc.fit_transform(train_data_2[categorical_features])
-# Transformar los datos de test
-test_oh = enc.transform(test_data[categorical_features])
-
-# Convertir los datos codificados a un DataFrame y añadir los nombres de las columnas
-train_oh = pd.DataFrame(train_oh.toarray(), columns=enc.get_feature_names_out(categorical_features))
-test_oh = pd.DataFrame(test_oh.toarray(), columns=enc.get_feature_names_out(categorical_features))
-
-# Unir los datos codificados con los datos numéricos
-train_encoded = train_data_2.join(train_oh)
-test_encoded = test_data.join(test_oh)
-
-del train_data_2
+train_df_oh, test_df_oh, dummies_train, dummies_test = fe.dummy_encoding(train, test_data, cat_features)
 
 
-# In[6]: Separamos los datos
+# In[6]: Separamos los datos en entrenamiento y test
 
-X = train_encoded.drop(['target'],axis=1)
-y = train_encoded['target']
+# Primero añadimos la variable target a train_df_oh
+train_df_oh_raw = train_df_oh.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
 
-# Dividimos los datos en entrenamiento y test (80 training, 20 test)
-X_train, X_test, y_train, y_test = train_test_split(X, y, stratify = y, test_size = .20, random_state = 42, shuffle=True)
+# Definimos X e y
+X = train_df_oh_raw.drop(columns = ['S_2', 'target', 'customer_ID'])
+y = train_df_oh_raw['target']
 
-print('Datos entrenamiento: ', X_train.shape)
-print('Datos test: ', X_test.shape)
+# # # Separamos los datos en entrenamiento y test
+# X_train, X_valid, y_train, y_valid = train_test_split(X, y, stratify = y, test_size = .20, random_state = 42, shuffle=True)
+
+# print('Datos entrenamiento: ', X_train.shape)
+# print('Datos test: ', X_valid.shape)
 
 
 # In[7]: Parámetros XGBoost
@@ -177,41 +139,84 @@ xgb_parms = {
 }
 
 
-# In[8]: XGBoost
+# In[8]: XGBoost con Stratified K-Fold Cross Validation
 
-# Creamos el dataset de entrenamiento indicando las variables categóricas
-# (Cambiar a DeviceQuantileDMatrix, es mucho más rápido)
+# Vamos a hacer un stratified k-fold cross validation con 5 folds
 
-dtrain = xgb.DMatrix(X_train, label=y_train, feature_names=X_train.columns, nthread=-1, enable_categorical=True)
-dtest = xgb.DMatrix(X_test, label=y_test, feature_names=X_test.columns, nthread=-1, enable_categorical=True)
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+importances = [] # Lista para guardar las importancias de las variables de cada fold
+scores = [] # Lista para guardar los scores de cada fold
+split = skf.split(X, y)
 
-# Entrenamos el modelo
+# Creamos el bucle para hacer el cross validation
+for fold, (train_index, valid_index) in enumerate(split):
 
-xgb_model = xgb.train(xgb_parms, dtrain, num_boost_round=1000, evals=[(dtrain,'train'),(dtest,'test')], 
-                      early_stopping_rounds=50, verbose_eval=50)
+    # Mensajes informativos
+    print('-'*50)
+    print('Fold:',fold+1)
+    print( 'Train size:', len(train_index), 'Validation size:', len(valid_index))
+    print('-'*50)
+
+    # Separamos los datos en entrenamiento y validación
+    X_train, X_valid = X.iloc[train_index], X.iloc[valid_index]
+    y_train, y_valid = y.iloc[train_index], y.iloc[valid_index]
+
+    # Creamos el dataset de entrenamiento indicando las variables categóricas
+    # (Cambiar a DeviceQuantileDMatrix, es mucho más rápido)
+
+    dtrain = xgb.DeviceQuantileDMatrix(X_train, label=y_train, feature_names=X_train.columns, nthread=-1, enable_categorical=True)
+    dvalid = xgb.DMatrix(X_valid, label=y_valid, feature_names=X_valid.columns, nthread=-1, enable_categorical=True)
+
+    # Entrenamos el modelo para el fold actual
+
+    xgb_model = xgb.train(xgb_parms, dtrain, num_boost_round=1000, evals=[(dtrain,'train'),(dvalid,'test')],
+                            early_stopping_rounds=50, verbose_eval=50) # feval ver custom metric https://www.kaggle.com/code/jiweiliu/rapids-cudf-feature-engineering-xgb
+    
+    # Guardamos el modelo
+    xgb_model.save_model(f'xgb_{fold}.json')
+
+    # Feature importance para el fold actual
+    importances.append(xgb_model.get_score(importance_type='weight')) # ‘weight’ - the number of times a feature is used to split the data across all trees.
+
+    # Predecimos sobre el conjunto de validación
+    y_pred = xgb_model.predict(dvalid)
+    
+    # Calculamos el score para el fold actual con la métrica customizada
+    score = amex_metric(y_valid, y_pred)
+    print('Métrica de Kaggle para el fold {fold}:', score)
+
+    # Valor medio de la métrica para todos los folds
+    scores.append(score)
+
+    # Liberamos memoria
+    del X_train, X_valid, y_train, y_valid, dtrain, dvalid
+    gc.collect()
+
+# Mostramos los resultados
+print('-'*50)
+print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scores))
 
 
-# In[9]: Evaluación del modelo
-# Predecimos sobre el conjunto de test
+# # In[10]: Save model
 
-y_pred = xgb_model.predict(dtest)
+# fe.save_model('XGB_model', xgb_model)
 
 
-# In[10]: Métrica
+# # In[10]: Métrica
 
-# Calculamos la métrica
-y_pred1=pd.DataFrame(data={'prediction':y_pred})
-y_true1=pd.DataFrame(data={'target':y_test.reset_index(drop=True)})
+# # Calculamos la métrica
+# y_pred1=pd.DataFrame(data={'prediction':y_pred})
+# y_true1=pd.DataFrame(data={'target':y_valid.reset_index(drop=True)})
 
-metric_score = amex_metric(y_true1, y_pred1)
-print('Gini: ', metric_score)
+# metric_score = amex_metric(y_true1, y_pred1)
+# print('Gini: ', metric_score)
 
 
 # In[11]: Curva ROC
 
 # Curva ROC de cada fold
 from sklearn.metrics import roc_curve, auc
-fpr, tpr, thresholds = roc_curve(y_test, y_pred)
+fpr, tpr, thresholds = roc_curve(y_valid, y_pred)
 roc_auc = auc(fpr, tpr)
 
 plt.figure()
@@ -241,5 +246,17 @@ sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
 
 # Feature importance
 xgb.plot_importance(xgb_model, max_num_features=20, height=0.5)
+
+# In[14]: Métricas
+
+# Compute precision, recall, F-measure and support for each class
+
+from sklearn.metrics import accuracy_score  
+from sklearn.metrics import precision_score                         
+from sklearn.metrics import recall_score
+
+print('Accuracy: ', accuracy_score(y_test, y_pred.round()))
+print('Precision: ', precision_score(y_test, y_pred.round()))
+print('Recall: ', recall_score(y_test, y_pred.round()))
 
 # %%

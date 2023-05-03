@@ -62,7 +62,7 @@ If we dummy encode them we will have k-1 new features for each categorical featu
 so there will be less features in the final dataset and the dimensionality will be reduced.
 """
 
-def dummy_encoding(train_df, test_df, cat_features):
+def dummy_encoding(train_df, test_df, cat_features): # Quitar test, dejar solo un df y hacer 2 llamadas
     # Dummy encoding
     train_df_oh = pd.get_dummies(train_df, columns = cat_features, drop_first = True)
     test_df_oh = pd.get_dummies(test_df, columns = cat_features, drop_first = True)
