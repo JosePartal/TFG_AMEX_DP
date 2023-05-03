@@ -3,3 +3,4 @@ MODELOS/
 *.pkl
 *.parquet
 *.xlsx
+*.pyc
