@@ -4,3 +4,4 @@ MODELOS/
 *.parquet
 *.xlsx
 *.pyc
+*.json
