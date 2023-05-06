@@ -18,13 +18,13 @@ import time
 
 # In[2]: Utility functions I: Model saving
 
-def save_model_fe(algorithm: str, model, fold):
+def save_model_fe(algorithm: str, model, fold, current_time):
     # Create a directory to store the output files
     results_path = Path('./MODELOS')
     results_path.mkdir(exist_ok=True)
 
     # Name experiment algorithm + current time
-    experiment_name = algorithm + '_' + time.strftime('%Y%m%d_%H%M%S')
+    experiment_name = algorithm + '_' + current_time
     experiment_dir = results_path / experiment_name
     experiment_dir.mkdir(exist_ok=True)
 
