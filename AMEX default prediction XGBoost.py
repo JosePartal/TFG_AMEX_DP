@@ -103,6 +103,29 @@ def amex_metric(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
 
     return 0.5 * (g + d)
 
+# https://www.kaggle.com/kyakovlev
+# https://www.kaggle.com/competitions/amex-default-prediction/discussion/327534
+def amex_metric_mod(y_true, y_pred):
+
+    labels     = np.transpose(np.array([y_true, y_pred]))
+    labels     = labels[labels[:, 1].argsort()[::-1]]
+    weights    = np.where(labels[:,0]==0, 20, 1)
+    cut_vals   = labels[np.cumsum(weights) <= int(0.04 * np.sum(weights))]
+    top_four   = np.sum(cut_vals[:,0]) / np.sum(labels[:,0])
+
+    gini = [0,0]
+    for i in [1,0]:
+        labels         = np.transpose(np.array([y_true, y_pred]))
+        labels         = labels[labels[:, i].argsort()[::-1]]
+        weight         = np.where(labels[:,0]==0, 20, 1)
+        weight_random  = np.cumsum(weight / np.sum(weight))
+        total_pos      = np.sum(labels[:, 0] *  weight)
+        cum_pos_found  = np.cumsum(labels[:, 0] * weight)
+        lorentz        = cum_pos_found / total_pos
+        gini[i]        = np.sum((lorentz - weight_random) * weight)
+
+    return 0.5 * (gini[1]/gini[0] + top_four)
+
 
 # In[5]: Codificación de las variables
 
@@ -115,9 +138,10 @@ train_df_oh, test_df_oh, dummies_train, dummies_test = fe.dummy_encoding(train, 
 
 # Primero añadimos la variable target a train_df_oh
 train_df_oh_raw = train_df_oh.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
+train_df_oh_raw = train_df_oh_raw.groupby('customer_ID').tail(1).set_index('customer_ID') # Última observación
 
 # Definimos X e y
-X = train_df_oh_raw.drop(columns = ['S_2', 'target', 'customer_ID'])
+X = train_df_oh_raw.drop(columns = ['S_2', 'target'])
 y = train_df_oh_raw['target']
 
 # # # Separamos los datos en entrenamiento y test
@@ -172,11 +196,11 @@ for fold, (train_index, valid_index) in enumerate(split):
 
     # Entrenamos el modelo para el fold actual
 
-    xgb_model = xgb.train(xgb_parms, dtrain, num_boost_round=1000, evals=[(dtrain,'train'),(dvalid,'test')],
+    xgb_model = xgb.train(xgb_parms, dtrain, num_boost_round=2500, evals=[(dtrain,'train'),(dvalid,'test')],
                             early_stopping_rounds=50, verbose_eval=50) # feval ver custom metric https://www.kaggle.com/code/jiweiliu/rapids-cudf-feature-engineering-xgb
     
     # Guardamos el modelo
-    xgb_model.save_model(f'xgb_{fold}.json') #GUARDARLO EN OTRA RUTA
+    fe.save_model_fe('XGBoost', xgb_model, fold) 
 
     # Feature importance para el fold actual
     importances.append(xgb_model.get_score(importance_type='weight')) # ‘weight’ - the number of times a feature is used to split the data across all trees.
@@ -185,38 +209,18 @@ for fold, (train_index, valid_index) in enumerate(split):
     y_pred = xgb_model.predict(dvalid)
     
     # Calculamos el score para el fold actual con la métrica customizada
-    y_true_amex = pd.DataFrame(data={'prediction':y_pred})
-    y_pred_amex = pd.DataFrame(data={'target':y_valid.reset_index(drop=True)})
-    AMEX_score = amex_metric(y_true_amex, y_pred_amex) # DA ERROR
+    AMEX_score = amex_metric_mod(y_valid.values, y_pred) # DA ERROR LA ORIGINAL
     print('Métrica de Kaggle para el fold {fold}:', AMEX_score)
     scores['AMEX'].append(AMEX_score)
 
-    # Calculamos el valor del Accuracy, Recall, Precision y F1 para el fold actual
-    ACC_score = accuracy_score(y_valid, y_pred)
-    Recall_score = recall_score(y_valid, y_pred)
-    Precision_score = precision_score(y_valid, y_pred)
-    F1_score = f1_score(y_valid, y_pred)
-    print('Accuracy:', ACC_score)
-    print('Recall:', Recall_score)
-    print('Precision:', Precision_score)
-    print('F1:', F1_score)
-    scores['Accuracy'].append(ACC_score)
-    scores['Recall'].append(Recall_score)
-    scores['Precision'].append(Precision_score)
-    scores['F1'].append(F1_score)
-
     # Liberamos memoria
-    del X_train, X_valid, y_train, y_valid, dtrain, dvalid, y_true_amex, y_pred_amex
+    del X_train, X_valid, y_train, y_valid, dtrain, dvalid
     gc.collect()
 
 
 # Mostramos los resultados
 print('-'*50)
 print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scores['AMEX']))
-print('Valor medio del Accuracy para todos los folds:', np.mean(scores['Accuracy']))
-print('Valor medio del Recall para todos los folds:', np.mean(scores['Recall']))
-print('Valor medio del Precision para todos los folds:', np.mean(scores['Precision']))
-print('Valor medio del F1 para todos los folds:', np.mean(scores['F1']))
 
 
 # # In[10]: Save model
@@ -266,16 +270,8 @@ print('Valor medio del F1 para todos los folds:', np.mean(scores['F1']))
 
 # In[13]: Feature importance
 
-# Creamos un dataframe con las importancias de cada variable para cada fold
-importances_df = pd.DataFrame(importances)
-importances_df = importances_df.fillna(0)
-importances_df = importances_df.astype('int32')
-
-# Calculamos la media de las importancias de cada variable
-importances_df['mean'] = importances_df.mean(axis=1)
-importances_df = importances_df.sort_values(by='mean', ascending=False)
-
-# Mostramos las 50 variables más importantes
-importances_df.head(50)
-
+# Plot top 50 features using plotly express
+import plotly.express as px
+fig = px.bar(pd.DataFrame(importances).T.sort_values(by=0, ascending=False).head(50), orientation='h')
+fig.show()
 # %%
