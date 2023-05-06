@@ -8,6 +8,7 @@ from pathlib import Path
 # Data manipulation
 import pandas as pd 
 import numpy as np
+import time
 
 # Data visualization
 import matplotlib as mpl  
@@ -175,6 +176,9 @@ importances = [] # Lista para guardar las importancias de las variables de cada 
 scores = {'AMEX': [], 'Accuracy': [], 'Recall': [], 'Precision': [], 'F1': []} # Diccionario para guardar los scores de cada fold
 split = skf.split(X, y)
 
+# Generamos la fecha para guardar los outpus en el mismo directorio
+current_time = time.strftime('%Y%m%d_%H%M%S')
+
 # Creamos el bucle para hacer el cross validation
 for fold, (train_index, valid_index) in enumerate(split):
 
@@ -200,7 +204,7 @@ for fold, (train_index, valid_index) in enumerate(split):
                             early_stopping_rounds=50, verbose_eval=50) # feval ver custom metric https://www.kaggle.com/code/jiweiliu/rapids-cudf-feature-engineering-xgb
     
     # Guardamos el modelo
-    fe.save_model_fe('XGBoost', xgb_model, fold) 
+    fe.save_model_fe('XGBoost', xgb_model, fold, current_time) # Crea una carpeta para cada minuto, cambiar para que lo guarde todo en la misma
 
     # Feature importance para el fold actual
     importances.append(xgb_model.get_score(importance_type='weight')) # ‘weight’ - the number of times a feature is used to split the data across all trees.
