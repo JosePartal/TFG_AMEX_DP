@@ -18,7 +18,7 @@ import time
 
 # In[2]: Utility functions I: Model saving
 
-def save_model(algorithm: str, model):
+def save_model_fe(algorithm: str, model, fold):
     # Create a directory to store the output files
     results_path = Path('./MODELOS')
     results_path.mkdir(exist_ok=True)
@@ -30,9 +30,9 @@ def save_model(algorithm: str, model):
 
     print(f'Saving model in {experiment_dir}')
 
-    # Save model
-    with open(experiment_dir / 'model.pkl', 'wb') as file:
-        pickle.dump(model, file)
+    # Save model with save_model() function in json format in the experiment directory
+    model_path = experiment_dir / f'{algorithm}_model_{str(fold)}.json'
+    model.save_model(model_path)
 
     print('Model saved successfully')
 
