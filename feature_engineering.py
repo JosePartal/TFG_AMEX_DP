@@ -62,6 +62,7 @@ If we dummy encode them we will have k-1 new features for each categorical featu
 so there will be less features in the final dataset and the dimensionality will be reduced.
 """
 
+# Concatenar train y test y hacer el dummy encoding, luego separarlos
 def dummy_encoding(train_df, test_df, cat_features): # Quitar test, dejar solo un df y hacer 2 llamadas
     # Dummy encoding
     train_df_oh = pd.get_dummies(train_df, columns = cat_features, drop_first = True)
@@ -105,7 +106,66 @@ def feat_aggregations(df, cat_features, num_features, groupby_var):
     del df_cat_agg, df_num_agg
     return df
 
-    
+
+# In[6]: Feature engineering functions IV: Differences
+
+# Function that creates new features with the difference between two observations of the same customer for a given variable
+
+def feat_diff(data, features, lag: int): # features = numerical_features
+    df_diffs = []
+    customer_ids = []
+    for customer_id, cid_data in data.groupby(['customer_ID']):
+        # Get the differences between last observation and last - lag observation 
+        diff_lag = cid_data[features].diff(lag).iloc[[-1]].values.astype(np.float32)
+        # Append to lists
+        df_diffs.append(diff_lag)
+        customer_ids.append(customer_id)
+    # Concatenate
+    df_diffs = np.concatenate(df_diffs, axis=0)
+    # Transform to dataframe
+    df_diffs = pd.DataFrame(df_diffs, columns=[col + f'_diff{lag}' for col in cid_data[features].columns])
+    # Add customer id
+    df_diffs['customer_ID'] = customer_ids
+    return df_diffs
+
+# Note: Just taking the diff between last and lag, do I need other differences? (last-k and last-k-j, etc.)
+
+
+# In[7]: Feature engineering functions V: Lagged features
+
+# Function that creates new features with the lagged values of a given variable
+
+def feat_lag(data, lags: list): # [1, 2, 3, 6, 11]
+    lag_variables = []
+
+    # Iterate through each customer's data
+    for customer_id, cid_data in data.groupby(['customer_ID']):
+        # Order by date
+        sorted_data = cid_data.sort_values('S_2', ascending=False)
+        # Number of observations of each customer
+        num_observations = len(sorted_data)
+        
+        # Iterate through each lag
+        for lag in lags:
+            # Check if lag < num_observations
+            if lag < num_observations: 
+                # Get lag observation
+                lag_observation = sorted_data.iloc[lag]
+                # Build dictionary to append to list
+                lag_variable = {'customer_ID': customer_id, 'lag': lag}
+
+                # Iterate through each column of the data (except customer_ID and S_2)
+                for column in cid_data.columns:
+                    if column not in ['customer_ID', 'S_2']:
+                        lag_variable['lag_{}_{}'.format(lag, column)] = lag_observation[column]
+                lag_variables.append(lag_variable)
+
+    # Convertir la lista de diccionarios en un DataFrame
+    lag_data = pd.DataFrame(lag_variables)
+
+    return lag_data
+
+# %%
 # # In[6]: data
 # train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
 # test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
@@ -121,3 +181,8 @@ def feat_aggregations(df, cat_features, num_features, groupby_var):
 # train_agg = feat_aggregations(train_oh, list_dummies_train, num_features, 'customer_ID')
 # train_agg
 # %%
+
+
+# Code for retrieving a list with the customers that have only one observation (only one record in S_2)
+# train['customer_ID'].value_counts()[train['customer_ID'].value_counts() == 1].index.tolist()
+
