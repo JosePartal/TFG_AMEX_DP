@@ -150,9 +150,10 @@ def feat_diff(data, features, lag: int): # features = numerical_features
 # In[7]: Feature engineering functions V: Lagged features
 
 # Function that creates new features with the lagged values of a given variable
-
+# PROBLEMA: GENERA UNA NUEVA OBSERVACIÓN PARA CADA LAG
 def feat_lag(data, lags: list): # [1, 2, 3, 6, 11]
     lag_variables = []
+    customer_ids = []
 
     # Iterate through each customer's data
     for customer_id, cid_data in data.groupby(['customer_ID']):
@@ -161,41 +162,104 @@ def feat_lag(data, lags: list): # [1, 2, 3, 6, 11]
         # Number of observations of each customer
         num_observations = len(sorted_data)
         
+        # Initialize lag_variable dictionary for current customer
+        lag_variable = {'customer_ID': customer_id}
+
         # Iterate through each lag
         for lag in lags:
             # Check if lag < num_observations
-            if lag < num_observations: # REVISAR Pasar a NaN las observaciones que no existan
+            if lag < num_observations:
                 # Get lag observation
                 lag_observation = sorted_data.iloc[lag]
-                # Build dictionary to append to list
-                lag_variable = {'customer_ID': customer_id, 'lag': lag}
-
                 # Iterate through each column of the data (except customer_ID and S_2)
                 for column in cid_data.columns:
                     if column not in ['customer_ID', 'S_2']:
-                        lag_variable['lag_{}_{}'.format(lag, column)] = lag_observation[column]
-                lag_variables.append(lag_variable)
-            # Else fill with NaNs
+                        lag_variable['{}_lag{}'.format(column, lag)] = lag_observation[column]
             else:
-                # Build dictionary to append to list
-                lag_variable = {'customer_ID': customer_id, 'lag': lag}
-
-                # Iterate through each column of the data (except customer_ID and S_2)
+                # Fill with NaNs
                 for column in cid_data.columns:
                     if column not in ['customer_ID', 'S_2']:
-                        lag_variable['lag_{}_{}'.format(lag, column)] = np.nan
-                lag_variables.append(lag_variable)
+                        lag_variable['{}_lag{}'.format(column, lag)] = np.nan
 
-    # Convertir la lista de diccionarios en un DataFrame
-    lag_data = pd.DataFrame(lag_variables)
+        lag_variables.append(lag_variable)
+        customer_ids.append(customer_id)
 
-    return lag_data
+    # Concatenate
+    lag_variables = pd.DataFrame(lag_variables)
+    # Add customer id
+    lag_variables['customer_ID'] = customer_ids
+
+    return lag_variables
 
 
 # In[8]: Feature engineering functions VI: Period means
 
 # Function that creates new features with the mean of a given variable for a given period
 # depending on the number of observations of each customer
+
+# ES ETERNO Y DA PROBLEMAS, REVISAR
+
+# def feat_period_means(data, features): # features = numerical_features
+#     period_means = []
+#     customer_ids = []
+#     column_names = []
+#     for customer_id, cid_data in data.groupby(['customer_ID']):
+#         # We are going to calculate the mean of different groups of observations. If a customer
+#         # does not have enough observations, we will fill with NaNs.
+
+#         # Get the mean of the last 6 observations and the mean of the 3 observations before the last 3 observations
+#         if len(cid_data) >= 6:
+#             mean_last_6M = cid_data[features].iloc[-6:].mean().values.astype(np.float32)
+#             mean_before_3M = cid_data[features].iloc[-6:-3].mean().values.astype(np.float32)
+#         else:
+#             mean_last_6M = np.full(len(features), np.nan)
+#             mean_before_3M = np.full(len(features), np.nan)
+#         # Append to lists    
+#         column_names.extend([col + '_mean_last_6M' for col in features])
+#         column_names.extend([col + '_mean_before_3M' for col in features])
+#         period_means.extend([mean_last_6M, mean_before_3M])
+        
+#         # Get the mean of the last 3 observations
+#         if len(cid_data) >= 3:
+#             mean_last_3M = cid_data[features].iloc[-3:].mean().values.astype(np.float32)
+#         else:
+#             mean_last_3M = np.full(len(features), np.nan)
+#         # Append to lists   
+#         column_names.extend([col + '_mean_last_3M' for col in features])
+#         period_means.append(mean_last_3M)
+
+#         # Get the mean of the 6 observations before the last 6 observations
+#         if len(cid_data) >= 12:
+#             mean_before_6M = cid_data[features].iloc[-12:-6].mean().values.astype(np.float32)
+#         else:
+#             mean_before_6M = np.full(len(features), np.nan)
+#         # Append to lists
+#         column_names.extend([col + '_mean_before_6M' for col in features])
+#         period_means.append(mean_before_6M)
+
+#         # Now we compute the relative increments of the means
+#         # Relative semestral growth
+#         inc_12m_6m = (mean_last_6M - mean_before_6M) / mean_before_6M
+#         # Relative trimestral growth
+#         inc_3m_3m = (mean_last_3M - mean_before_3M) / mean_before_3M
+
+#         # Append column names
+#         column_names.extend([col + '_inc_12m_6m' for col in features])
+#         column_names.extend([col + '_inc_3m_3m' for col in features])
+#         period_means.extend([inc_12m_6m, inc_3m_3m])
+        
+#         # Append customer id
+#         customer_ids.append(customer_id)
+
+#     # Concatenate
+#     period_means = np.concatenate(period_means, axis=0) #.reshape(-1, len(column_names))
+#     # Transform to dataframe
+#     period_means = pd.DataFrame(period_means, columns=column_names)
+
+#     # Add customer id
+#     period_means['customer_ID'] = customer_ids
+
+#     return period_means
 
 def feat_period_means(data, features): # features = numerical_features
     period_means = []
@@ -221,7 +285,7 @@ def feat_period_means(data, features): # features = numerical_features
         # Append to lists
         period_means.append(mean_last_6M)
         period_means.append(mean_before_3M)
-        
+
         # Get the mean of the last 3 observations
         if len(cid_data) >= 3:
             mean_last_3M = cid_data[features].iloc[-3:].mean().values.astype(np.float32)
@@ -272,13 +336,6 @@ def feat_period_means(data, features): # features = numerical_features
     return period_means
 
 
-
-
-
-
-
-
-
 # In[9]: Feature engineering functions VII: First/last observations
 
 # Function that creates new features with the first and last observations of a given variable
@@ -302,24 +359,18 @@ def feat_last_diffdiv(agg_features): # df_num_agg
     return agg_features
 
 
-# In[10]: Feature engineering functions VIII: Relative growth
-
-# Function that creates new features with the relative growth of a given variable. 
-# We will calculate the difference between the means of the first half and the second half of the observations of each customer.
-# e.g. (mean of the last 6 months - mean of the first 6 months) / mean of the first 6 months
-
 # %%
-# # In[6]: data
-# train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
+# In[6]: data
+train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
 # test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
 
-# # In[7]: tests
+# In[7]: tests
 
-# not_used, cat_features, bin_features_1, bin_features_2, bin_features_3, num_features = feature_types(train)
+not_used, cat_features, bin_features_1, bin_features_2, bin_features_3, num_features = feature_types(train)
 
 # train_oh, test_oh, list_dummies_train, list_dummies_test = dummy_encoding(train, test_data, cat_features)
 
-# # %%
+# %%
 
 # train_agg = feat_aggregations(train_oh, list_dummies_train, num_features, 'customer_ID')
 # train_agg
@@ -328,4 +379,5 @@ def feat_last_diffdiv(agg_features): # df_num_agg
 
 # Code for retrieving a list with the customers that have only one observation (only one record in S_2)
 # train['customer_ID'].value_counts()[train['customer_ID'].value_counts() == 1].index.tolist()
+# b8d4227c0d88180958483c0db718554819048f7af142edb30d84068a7fb5ee17
 
