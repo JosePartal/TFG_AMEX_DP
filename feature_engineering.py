@@ -14,6 +14,7 @@ import pickle
 
 # Time management
 import time
+from tqdm import tqdm # Progress bar
 
 
 # In[2]: Utility functions I: Model saving
@@ -197,143 +198,54 @@ def feat_lag(data, lags: list): # [1, 2, 3, 6, 11]
 # Function that creates new features with the mean of a given variable for a given period
 # depending on the number of observations of each customer
 
-# ES ETERNO Y DA PROBLEMAS, REVISAR
+# Code for computing the mean of the last 6 observations for all customers for the numerical features
+# filling with NaNs the feature's values if the customer has less than 6 observations
+# mean_test = train.groupby('customer_ID')[num_features].apply(lambda x: x.iloc[-6:].mean())
 
-# def feat_period_means(data, features): # features = numerical_features
-#     period_means = []
-#     customer_ids = []
-#     column_names = []
-#     for customer_id, cid_data in data.groupby(['customer_ID']):
-#         # We are going to calculate the mean of different groups of observations. If a customer
-#         # does not have enough observations, we will fill with NaNs.
+# Convert to NaN the mean values of the customers in mean_test with less than 6 observations in train dataframe
+# mean_test_nan = mean_test.where(train['customer_ID'].value_counts() >= 6, np.nan)
 
-#         # Get the mean of the last 6 observations and the mean of the 3 observations before the last 3 observations
-#         if len(cid_data) >= 6:
-#             mean_last_6M = cid_data[features].iloc[-6:].mean().values.astype(np.float32)
-#             mean_before_3M = cid_data[features].iloc[-6:-3].mean().values.astype(np.float32)
-#         else:
-#             mean_last_6M = np.full(len(features), np.nan)
-#             mean_before_3M = np.full(len(features), np.nan)
-#         # Append to lists    
-#         column_names.extend([col + '_mean_last_6M' for col in features])
-#         column_names.extend([col + '_mean_before_3M' for col in features])
-#         period_means.extend([mean_last_6M, mean_before_3M])
-        
-#         # Get the mean of the last 3 observations
-#         if len(cid_data) >= 3:
-#             mean_last_3M = cid_data[features].iloc[-3:].mean().values.astype(np.float32)
-#         else:
-#             mean_last_3M = np.full(len(features), np.nan)
-#         # Append to lists   
-#         column_names.extend([col + '_mean_last_3M' for col in features])
-#         period_means.append(mean_last_3M)
-
-#         # Get the mean of the 6 observations before the last 6 observations
-#         if len(cid_data) >= 12:
-#             mean_before_6M = cid_data[features].iloc[-12:-6].mean().values.astype(np.float32)
-#         else:
-#             mean_before_6M = np.full(len(features), np.nan)
-#         # Append to lists
-#         column_names.extend([col + '_mean_before_6M' for col in features])
-#         period_means.append(mean_before_6M)
-
-#         # Now we compute the relative increments of the means
-#         # Relative semestral growth
-#         inc_12m_6m = (mean_last_6M - mean_before_6M) / mean_before_6M
-#         # Relative trimestral growth
-#         inc_3m_3m = (mean_last_3M - mean_before_3M) / mean_before_3M
-
-#         # Append column names
-#         column_names.extend([col + '_inc_12m_6m' for col in features])
-#         column_names.extend([col + '_inc_3m_3m' for col in features])
-#         period_means.extend([inc_12m_6m, inc_3m_3m])
-        
-#         # Append customer id
-#         customer_ids.append(customer_id)
-
-#     # Concatenate
-#     period_means = np.concatenate(period_means, axis=0) #.reshape(-1, len(column_names))
-#     # Transform to dataframe
-#     period_means = pd.DataFrame(period_means, columns=column_names)
-
-#     # Add customer id
-#     period_means['customer_ID'] = customer_ids
-
-#     return period_means
+""" The fastest way I have achieved to compute all these features is by 
+    calculating the means for all the customers and then replace with NaNs the customers
+    with less than N observations."""
 
 def feat_period_means(data, features): # features = numerical_features
-    period_means = []
-    customer_ids = []
-    column_names = []
-    for customer_id, cid_data in data.groupby(['customer_ID']):
-        # We are going to calculate the mean of different groups of observations. If a customer
-        # does not have enough observations, we will fill with NaNs.
+    # Compute the mean of the last 6 observations for all customers for the numerical features
+    mean_last_6M = data.groupby('customer_ID')[features].apply(lambda x: x.iloc[-6:].mean())
+    print('Mean last 6M computed')
+    # Compute the mean of the last 3 observations for all customers for the numerical features
+    mean_last_3M = data.groupby('customer_ID')[features].apply(lambda x: x.iloc[-3:].mean())
+    print('Mean last 3M computed')
+    # Compute the mean of the 6 observations before the last 6 observations
+    mean_before_last_6M = data.groupby('customer_ID')[features].apply(lambda x: x.iloc[-12:-6].mean())
+    print('Mean before last 6M computed')
+    # Compute the mean of the 3 observations before the last 3 observations
+    mean_before_last_3M = data.groupby('customer_ID')[features].apply(lambda x: x.iloc[-6:-3].mean())
+    print('Mean before last 3M computed')
 
-        # Get the mean of the last 6 observations and the mean of the 3 observations before the last 3 observations
-        if len(cid_data) >= 6:
-            mean_last_6M = cid_data[features].iloc[-6:].mean().values.astype(np.float32)
-            mean_before_3M = cid_data[features].iloc[-6:-3].mean().values.astype(np.float32)
-            # Append column names
-            column_names.extend([col + '_mean_last_6M' for col in features])
-            column_names.extend([col + '_mean_before_3M' for col in features])
-        else:
-            mean_last_6M = np.full(len(features), np.nan)
-            mean_before_3M = np.full(len(features), np.nan)
-            # Append column names
-            column_names.extend([col + '_mean_last_6M' for col in features])
-            column_names.extend([col + '_mean_before_3M' for col in features])
-        # Append to lists
-        period_means.append(mean_last_6M)
-        period_means.append(mean_before_3M)
+    # Convert to NaN the mean values of the customers with less than 6 observations in train dataframe
+    mean_last_6M = mean_last_6M.where(data['customer_ID'].value_counts() >= 6, np.nan)
+    print('Mean last 6M converted to NaNs for customers with less than 6 observations')
+    # Convert to NaN the mean values of the customers with less than 3 observations in train dataframe
+    mean_last_3M = mean_last_3M.where(data['customer_ID'].value_counts() >= 3, np.nan)
+    print('Mean last 3M converted to NaNs for customers with less than 3 observations')
+    # Convert to NaN the mean values of the customers with less than 6 observations in train dataframe
+    mean_before_last_6M = mean_before_last_6M.where(data['customer_ID'].value_counts() >= 12, np.nan)
+    print('Mean before last 6M converted to NaNs for customers with less than 12 observations')
+    # Convert to NaN the mean values of the customers with less than 3 observations in train dataframe
+    mean_before_last_3M = mean_before_last_3M.where(data['customer_ID'].value_counts() >= 6, np.nan)
+    print('Mean before last 3M converted to NaNs for customers with less than 6 observations')
 
-        # Get the mean of the last 3 observations
-        if len(cid_data) >= 3:
-            mean_last_3M = cid_data[features].iloc[-3:].mean().values.astype(np.float32)
-            # Append column names
-            column_names.extend([col + '_mean_last_3M' for col in features])
-        else:
-            mean_last_3M = np.full(len(features), np.nan)
-            # Append column names
-            column_names.extend([col + '_mean_last_3M' for col in features])
-        # Append to lists
-        period_means.append(mean_last_3M)
-
-        # Get the mean of the 6 observations before the last 6 observations
-        if len(cid_data) >= 12:
-            mean_before_6M = cid_data[features].iloc[-12:-6].mean().values.astype(np.float32)
-            # Append column names
-            column_names.extend([col + '_mean_before_6M' for col in features])
-        else:
-            mean_before_6M = np.full(len(features), np.nan)
-            # Append column names
-            column_names.extend([col + '_mean_before_6M' for col in features])
-        # Append to lists
-        period_means.append(mean_before_6M)
-
-        # Now we compute the relative increments of the means
-        # Relative semestral growth
-        inc_12m_6m = (mean_last_6M - mean_before_6M) / mean_before_6M
-        # Relative trimestral growth
-        inc_3m_3m = (mean_last_3M - mean_before_3M) / mean_before_3M
-
-        # Append column names
-        column_names.extend([col + '_inc_12m_6m' for col in features])
-        column_names.extend([col + '_inc_3m_3m' for col in features])
-
-        # Append to lists
-        period_means.append(inc_12m_6m)
-        period_means.append(inc_3m_3m)
-        customer_ids.append(customer_id)
+    # Change column names
+    mean_last_6M.columns = [col + '_mean_last_6M' for col in mean_last_6M.columns]
+    mean_last_3M.columns = [col + '_mean_last_3M' for col in mean_last_3M.columns]
+    mean_before_last_6M.columns = [col + '_mean_before_last_6M' for col in mean_before_last_6M.columns]
+    mean_before_last_3M.columns = [col + '_mean_before_last_3M' for col in mean_before_last_3M.columns]
 
     # Concatenate
-    period_means = np.concatenate(period_means, axis=0)
-    # Transform to dataframe
-    period_means = pd.DataFrame(period_means, columns=column_names)
+    mean_df = pd.concat([mean_last_6M, mean_last_3M, mean_before_last_6M, mean_before_last_3M], axis=1)
 
-    # Add customer id
-    period_means['customer_ID'] = customer_ids
-
-    return period_means
+    return mean_df
 
 
 # In[9]: Feature engineering functions VII: First/last observations
@@ -381,3 +293,22 @@ not_used, cat_features, bin_features_1, bin_features_2, bin_features_3, num_feat
 # train['customer_ID'].value_counts()[train['customer_ID'].value_counts() == 1].index.tolist()
 # b8d4227c0d88180958483c0db718554819048f7af142edb30d84068a7fb5ee17
 
+
+
+# Store the means_df DataFrame in a parquet file and save it in the current directory
+# means_df = feat_period_means_vectorized(train, num_features)
+# means_df.to_parquet('means_df.parquet.gzip', compression='gzip')
+# %%
+
+# Code for computing the mean of the last 6 observations for all customers for the numerical features
+# filling with NaNs the feature's values if the customer has less than 6 observations
+# mean_test = train.groupby('customer_ID')[num_features].apply(lambda x: x.iloc[-6:].mean())
+
+# Convert to NaN the mean values of the customers in mean_test with less than 6 observations in train dataframe
+# mean_test_nan = mean_test.where(train['customer_ID'].value_counts() >= 6, np.nan)
+
+
+
+# mean_test2 = train.groupby('customer_ID')[num_features].apply(lambda x: x.iloc[-6:].mean() if len(x) >= 6 else pd.Series([np.nan]))
+
+# mean_test2
