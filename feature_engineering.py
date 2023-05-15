@@ -104,7 +104,7 @@ We will create to functions for this purpose: one for categorical features and o
 
 # Function that creates aggregated features for the variables of a dataset
 
-def feat_aggregations(df, cat_features, num_features, groupby_var):
+def feat_aggregations(df, cat_features, num_features, groupby_var = 'customer_ID'):
     # Group by the specified variable and calculate the statistics
     df_cat_agg = df.groupby(groupby_var)[cat_features].agg(['count', 'first', 'last', 'nunique'])
     df_num_agg = df.groupby(groupby_var)[num_features].agg(['mean', 'std', 'max', 'min', 'first', 'last', 'median'])
@@ -113,15 +113,7 @@ def feat_aggregations(df, cat_features, num_features, groupby_var):
     df_cat_agg.columns = ['_'.join(col) for col in df_cat_agg.columns]
     df_num_agg.columns = ['_'.join(col) for col in df_num_agg.columns]
 
-    # Reset index
-    # df_cat_agg = df_cat_agg.reset_index(inplace = True)
-    # df_num_agg = df_num_agg.reset_index(inplace = True)
-
-    # Concat the aggregated features
-    df = pd.concat([df_cat_agg, df_num_agg], axis = 1)
-
-    del df_cat_agg, df_num_agg
-    return df
+    return df_cat_agg, df_num_agg
 
 
 # In[6]: Feature engineering functions IV: Differences
@@ -131,18 +123,23 @@ def feat_aggregations(df, cat_features, num_features, groupby_var):
 def feat_diff(data, features, lag: int): # features = numerical_features
     df_diffs = []
     customer_ids = []
+
     for customer_id, cid_data in data.groupby(['customer_ID']):
         # Get the differences between last observation and last - lag observation 
         diff_lag = cid_data[features].diff(lag).iloc[[-1]].values.astype(np.float32)
         # Append to lists
         df_diffs.append(diff_lag)
         customer_ids.append(customer_id)
+
     # Concatenate
     df_diffs = np.concatenate(df_diffs, axis=0)
     # Transform to dataframe
     df_diffs = pd.DataFrame(df_diffs, columns=[col + f'_diff{lag}' for col in cid_data[features].columns])
     # Add customer id
     df_diffs['customer_ID'] = customer_ids
+    # Set customer_ID as index
+    df_diffs.set_index('customer_ID', inplace=True)
+
     return df_diffs
 
 # Note: Just taking the diff between last and lag, do I need other differences? (last-k and last-k-j, etc.)
@@ -151,7 +148,6 @@ def feat_diff(data, features, lag: int): # features = numerical_features
 # In[7]: Feature engineering functions V: Lagged features
 
 # Function that creates new features with the lagged values of a given variable
-# PROBLEMA: GENERA UNA NUEVA OBSERVACIÓN PARA CADA LAG
 def feat_lag(data, lags: list): # [1, 2, 3, 6, 11]
     lag_variables = []
     customer_ids = []
@@ -189,6 +185,8 @@ def feat_lag(data, lags: list): # [1, 2, 3, 6, 11]
     lag_variables = pd.DataFrame(lag_variables)
     # Add customer id
     lag_variables['customer_ID'] = customer_ids
+    # Set customer_ID as index
+    lag_variables.set_index('customer_ID', inplace=True)
 
     return lag_variables
 
@@ -222,6 +220,10 @@ def feat_period_means(data, features): # features = numerical_features
     # Compute the mean of the 3 observations before the last 3 observations
     mean_before_last_3M = data.groupby('customer_ID')[features].apply(lambda x: x.iloc[-6:-3].mean())
     print('Mean before last 3M computed')
+    # Compute the mean of the first 3 observations (only want customers with 13 observations)
+    mean_first_3M = data.groupby('customer_ID')[features].apply(lambda x: x.iloc[:3].mean())
+    print('Mean first 3M computed')
+
 
     # Convert to NaN the mean values of the customers with less than 6 observations in train dataframe
     mean_last_6M = mean_last_6M.where(data['customer_ID'].value_counts() >= 6, np.nan)
@@ -235,6 +237,9 @@ def feat_period_means(data, features): # features = numerical_features
     # Convert to NaN the mean values of the customers with less than 3 observations in train dataframe
     mean_before_last_3M = mean_before_last_3M.where(data['customer_ID'].value_counts() >= 6, np.nan)
     print('Mean before last 3M converted to NaNs for customers with less than 6 observations')
+    # Convert to NaN the mean values of the customers with less than 13 observations in train dataframe
+    mean_first_3M = mean_first_3M.where(data['customer_ID'].value_counts() == 13, np.nan)
+    print('Mean first 3M converted to NaNs for customers with less than 13 observations')
 
     # Compute the relative difference between the mean of the last 6 observations and the mean of the 6 observations before
     # the last 6 observations
@@ -248,6 +253,11 @@ def feat_period_means(data, features): # features = numerical_features
     # Convert to NaN if the denominator is 0
     inc_6m_3m = inc_6m_3m.where(mean_before_last_3M != 0, np.nan)
     print('Relative difference mean last 3M computed')
+    # Compute the relative difference between the mean of the last 3 observations and the mean of the first 3 observations
+    inc_last3m_first3m = (mean_last_3M - mean_first_3M) / mean_first_3M
+    # Convert to NaN if the denominator is 0
+    inc_last3m_first3m = inc_last3m_first3m.where(mean_first_3M != 0, np.nan)
+    print('Relative difference mean last 3M and mean first 3M computed')
 
     # Change column names
     mean_last_6M.columns = [col + '_mean_last_6M' for col in mean_last_6M.columns]
@@ -256,10 +266,11 @@ def feat_period_means(data, features): # features = numerical_features
     mean_before_last_3M.columns = [col + '_mean_3M_before_last_3M' for col in mean_before_last_3M.columns]
     inc_12m_6m.columns = [col + '_inc_12m_6m' for col in inc_12m_6m.columns]
     inc_6m_3m.columns = [col + '_inc_6m_3m' for col in inc_6m_3m.columns]
+    inc_last3m_first3m.columns = [col + '_inc_last3m_first3m' for col in inc_last3m_first3m.columns]
 
     # Concatenate
     mean_df = pd.concat([mean_last_6M, mean_last_3M, mean_before_last_6M, mean_before_last_3M, 
-                         inc_12m_6m, inc_6m_3m], axis=1)
+                         inc_12m_6m, inc_6m_3m, inc_last3m_first3m], axis=1)
 
     return mean_df
 
@@ -272,42 +283,100 @@ def feat_period_means(data, features): # features = numerical_features
 # 3. Last - xxx: ['first','mean','std','median','min','max']
 # 4. Last / xxx: ['first','mean','std','median','min','max']
 
-def feat_last_diffdiv(agg_features): # df_num_agg
+def feat_last_diffdiv(df, cat_features, num_features, groupby_var = 'customer_ID'): 
+    # Call the feat_aggregations function to get the aggregated features
+    df_cat_agg, df_num_agg = feat_aggregations(df, cat_features, num_features, groupby_var)
+
     # Iterate through features
-    for feature in agg_features:
+    for feature in df_num_agg:
 
         # Check if last and first are in the feature name and compute difference and division
-        if 'last' in feature and feature.replace('last', 'first') in agg_features:
-            agg_features[feature + '_last_sub_first'] = agg_features[feature] - agg_features[feature.replace('last', 'first')]
-            agg_features[feature + '_last_div_first'] = agg_features[feature] / agg_features[feature.replace('last', 'first')]
+        if 'last' in feature and feature.replace('last', 'first') in df_num_agg:
+            df_num_agg[feature + '_last_sub_first'] = df_num_agg[feature] - df_num_agg[feature.replace('last', 'first')]
+            df_num_agg[feature + '_last_div_first'] = df_num_agg[feature] / df_num_agg[feature.replace('last', 'first')]
 
         # Check if last and mean are in the feature name and compute difference and division
-        elif 'last' in feature and feature.replace('last', 'mean') in agg_features:
-            agg_features[feature + '_last_sub_mean'] = agg_features[feature] - agg_features[feature.replace('last', 'mean')]
-            agg_features[feature + '_last_div_mean'] = agg_features[feature] / agg_features[feature.replace('last', 'mean')]
+        elif 'last' in feature and feature.replace('last', 'mean') in df_num_agg:
+            df_num_agg[feature + '_last_sub_mean'] = df_num_agg[feature] - df_num_agg[feature.replace('last', 'mean')]
+            df_num_agg[feature + '_last_div_mean'] = df_num_agg[feature] / df_num_agg[feature.replace('last', 'mean')]
 
         # Check if last and std are in the feature name and compute difference and division
-        elif 'last' in feature and feature.replace('last', 'std') in agg_features:
-            agg_features[feature + '_last_sub_std'] = agg_features[feature] - agg_features[feature.replace('last', 'std')]
-            agg_features[feature + '_last_div_std'] = agg_features[feature] / agg_features[feature.replace('last', 'std')]
+        elif 'last' in feature and feature.replace('last', 'std') in df_num_agg:
+            df_num_agg[feature + '_last_sub_std'] = df_num_agg[feature] - df_num_agg[feature.replace('last', 'std')]
+            df_num_agg[feature + '_last_div_std'] = df_num_agg[feature] / df_num_agg[feature.replace('last', 'std')]
 
         # Check if last and median are in the feature name and compute difference and division
-        elif 'last' in feature and feature.replace('last', 'median') in agg_features:
-            agg_features[feature + '_last_sub_median'] = agg_features[feature] - agg_features[feature.replace('last', 'median')]
-            agg_features[feature + '_last_div_median'] = agg_features[feature] / agg_features[feature.replace('last', 'median')]
+        elif 'last' in feature and feature.replace('last', 'median') in df_num_agg:
+            df_num_agg[feature + '_last_sub_median'] = df_num_agg[feature] - df_num_agg[feature.replace('last', 'median')]
+            df_num_agg[feature + '_last_div_median'] = df_num_agg[feature] / df_num_agg[feature.replace('last', 'median')]
 
         # Check if last and min are in the feature name and compute difference and division
-        elif 'last' in feature and feature.replace('last', 'min') in agg_features:
-            agg_features[feature + '_last_sub_min'] = agg_features[feature] - agg_features[feature.replace('last', 'min')]
-            agg_features[feature + '_last_div_min'] = agg_features[feature] / agg_features[feature.replace('last', 'min')]
+        elif 'last' in feature and feature.replace('last', 'min') in df_num_agg:
+            df_num_agg[feature + '_last_sub_min'] = df_num_agg[feature] - df_num_agg[feature.replace('last', 'min')]
+            df_num_agg[feature + '_last_div_min'] = df_num_agg[feature] / df_num_agg[feature.replace('last', 'min')]
 
         # Check if last and max are in the feature name and compute difference and division
-        elif 'last' in feature and feature.replace('last', 'max') in agg_features:
-            agg_features[feature + '_last_sub_max'] = agg_features[feature] - agg_features[feature.replace('last', 'max')]
-            agg_features[feature + '_last_div_max'] = agg_features[feature] / agg_features[feature.replace('last', 'max')]
+        elif 'last' in feature and feature.replace('last', 'max') in df_num_agg:
+            df_num_agg[feature + '_last_sub_max'] = df_num_agg[feature] - df_num_agg[feature.replace('last', 'max')]
+            df_num_agg[feature + '_last_div_max'] = df_num_agg[feature] / df_num_agg[feature.replace('last', 'max')]
 
-    return agg_features
+    # Concat the aggregated features
+    df = pd.concat([df_cat_agg, df_num_agg], axis = 1)
 
+    return df
+
+
+# In[10]: Feature engineering functions VIII: Combined dataset
+
+# Function that creates a combined dataset with all the features created
+def feat_combined(data, groupby_var = 'customer_ID'):
+
+    # Call the feature_types function to get the feature types
+    not_used, cat_features, bin_features_1, bin_features_2, bin_features_3, num_features = feature_types(data)
+    print('Feature types done')
+
+    # Call the feat_diff function to get the difference features
+    df_diff = feat_diff(data, num_features, 1)
+    print('Difference features done')
+
+    # Call the feat_lag function to get the lagged features
+    df_lag = feat_lag(data, [1, 2, 3, 6, 11])
+    print('Lagged features done')
+
+    # Call the feat_period_means function to get the period means features
+    df_means = feat_period_means(data, num_features)
+    print('Period means features done')
+
+    # Call the feat_last_diffdiv function to get the last difference and division features
+    df_last_diffdiv = feat_last_diffdiv(data, cat_features, num_features, groupby_var)
+    print('Last difference and division features done')
+
+    # Merge on customer_ID (index)
+    df_merged = df_last_diffdiv.merge(df_diff, how='inner', on='customer_ID').merge(df_lag, how='inner', on='customer_ID').merge(df_means, how='inner', on='customer_ID')
+    print('Merge done')
+
+    del not_used, bin_features_1, bin_features_2, bin_features_3, df_diff, df_lag, df_means, df_last_diffdiv
+
+    return df_merged, cat_features, num_features
+
+
+# In[11]: Save the combined dataset in a parquet file
+
+def save_combined(data, dataset_name: str): # dataset_name = 'train' or 'test'
+    # Create a directory to store the output files
+    results_path = Path('./DATASETS')
+    results_path.mkdir(exist_ok=True)
+
+    # Name experiment
+    experiment_name = dataset_name + '_' + 'combined_dataset'
+    experiment_dir = results_path / experiment_name
+    experiment_dir.mkdir(exist_ok=True)
+
+    print(f'Saving combined dataset in {experiment_dir}')
+
+    # Save the combined dataset in a parquet file
+    data.to_parquet(experiment_dir / 'combined_dataset.parquet.gzip', compression='gzip')
+    print('Combined dataset saved successfully')
 
 # %%
 # In[6]: data
@@ -316,7 +385,7 @@ train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-pr
 
 # In[7]: tests
 
-not_used, cat_features, bin_features_1, bin_features_2, bin_features_3, num_features = feature_types(train)
+# not_used, cat_features, bin_features_1, bin_features_2, bin_features_3, num_features = feature_types(train)
 
 # train_oh, test_oh, list_dummies_train, list_dummies_test = dummy_encoding(train, test_data, cat_features)
 
