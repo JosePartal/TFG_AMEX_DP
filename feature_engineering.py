@@ -236,14 +236,30 @@ def feat_period_means(data, features): # features = numerical_features
     mean_before_last_3M = mean_before_last_3M.where(data['customer_ID'].value_counts() >= 6, np.nan)
     print('Mean before last 3M converted to NaNs for customers with less than 6 observations')
 
+    # Compute the relative difference between the mean of the last 6 observations and the mean of the 6 observations before
+    # the last 6 observations
+    inc_12m_6m = (mean_last_6M - mean_before_last_6M) / mean_before_last_6M
+    # Convert to NaN if the denominator is 0 (need it to avoid inf values)
+    inc_12m_6m = inc_12m_6m.where(mean_before_last_6M != 0, np.nan)
+    print('Relative difference mean last 6M computed')
+    # Compute the relative difference between the mean of the last 3 observations and the mean of the 3 observations before
+    # the last 3 observations
+    inc_6m_3m = (mean_last_3M - mean_before_last_3M) / mean_before_last_3M
+    # Convert to NaN if the denominator is 0
+    inc_6m_3m = inc_6m_3m.where(mean_before_last_3M != 0, np.nan)
+    print('Relative difference mean last 3M computed')
+
     # Change column names
     mean_last_6M.columns = [col + '_mean_last_6M' for col in mean_last_6M.columns]
     mean_last_3M.columns = [col + '_mean_last_3M' for col in mean_last_3M.columns]
-    mean_before_last_6M.columns = [col + '_mean_before_last_6M' for col in mean_before_last_6M.columns]
-    mean_before_last_3M.columns = [col + '_mean_before_last_3M' for col in mean_before_last_3M.columns]
+    mean_before_last_6M.columns = [col + '_mean_6M_before_last_6M' for col in mean_before_last_6M.columns]
+    mean_before_last_3M.columns = [col + '_mean_3M_before_last_3M' for col in mean_before_last_3M.columns]
+    inc_12m_6m.columns = [col + '_inc_12m_6m' for col in inc_12m_6m.columns]
+    inc_6m_3m.columns = [col + '_inc_6m_3m' for col in inc_6m_3m.columns]
 
     # Concatenate
-    mean_df = pd.concat([mean_last_6M, mean_last_3M, mean_before_last_6M, mean_before_last_3M], axis=1)
+    mean_df = pd.concat([mean_last_6M, mean_last_3M, mean_before_last_6M, mean_before_last_3M, 
+                         inc_12m_6m, inc_6m_3m], axis=1)
 
     return mean_df
 
