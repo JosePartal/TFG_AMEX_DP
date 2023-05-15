@@ -107,7 +107,7 @@ We will create to functions for this purpose: one for categorical features and o
 def feat_aggregations(df, cat_features, num_features, groupby_var):
     # Group by the specified variable and calculate the statistics
     df_cat_agg = df.groupby(groupby_var)[cat_features].agg(['count', 'first', 'last', 'nunique'])
-    df_num_agg = df.groupby(groupby_var)[num_features].agg(['mean', 'std', 'max', 'min', 'first', 'last'])
+    df_num_agg = df.groupby(groupby_var)[num_features].agg(['mean', 'std', 'max', 'min', 'first', 'last', 'median'])
 
     # Strings list for aggregated features names
     df_cat_agg.columns = ['_'.join(col) for col in df_cat_agg.columns]
@@ -269,6 +269,8 @@ def feat_period_means(data, features): # features = numerical_features
 # Function that creates new features with the first and last observations of a given variable
 # 1. Last - First: The change since we first see the client to the last time we see the client.
 # 2. Last / First: The fractional difference since we first see the client to the last time we see the client.
+# 3. Last - xxx: ['first','mean','std','median','min','max']
+# 4. Last / xxx: ['first','mean','std','median','min','max']
 
 def feat_last_diffdiv(agg_features): # df_num_agg
     # Iterate through features
@@ -276,13 +278,33 @@ def feat_last_diffdiv(agg_features): # df_num_agg
 
         # Check if last and first are in the feature name and compute difference and division
         if 'last' in feature and feature.replace('last', 'first') in agg_features:
-            agg_features[feature + '_lag_sub_first'] = agg_features[feature] - agg_features[feature.replace('last', 'first')]
-            agg_features[feature + '_lag_div_first'] = agg_features[feature] / agg_features[feature.replace('last', 'first')]
+            agg_features[feature + '_last_sub_first'] = agg_features[feature] - agg_features[feature.replace('last', 'first')]
+            agg_features[feature + '_last_div_first'] = agg_features[feature] / agg_features[feature.replace('last', 'first')]
 
         # Check if last and mean are in the feature name and compute difference and division
         elif 'last' in feature and feature.replace('last', 'mean') in agg_features:
-            agg_features[feature + '_lag_sub_mean'] = agg_features[feature] - agg_features[feature.replace('last', 'mean')]
-            agg_features[feature + '_lag_div_mean'] = agg_features[feature] / agg_features[feature.replace('last', 'mean')]
+            agg_features[feature + '_last_sub_mean'] = agg_features[feature] - agg_features[feature.replace('last', 'mean')]
+            agg_features[feature + '_last_div_mean'] = agg_features[feature] / agg_features[feature.replace('last', 'mean')]
+
+        # Check if last and std are in the feature name and compute difference and division
+        elif 'last' in feature and feature.replace('last', 'std') in agg_features:
+            agg_features[feature + '_last_sub_std'] = agg_features[feature] - agg_features[feature.replace('last', 'std')]
+            agg_features[feature + '_last_div_std'] = agg_features[feature] / agg_features[feature.replace('last', 'std')]
+
+        # Check if last and median are in the feature name and compute difference and division
+        elif 'last' in feature and feature.replace('last', 'median') in agg_features:
+            agg_features[feature + '_last_sub_median'] = agg_features[feature] - agg_features[feature.replace('last', 'median')]
+            agg_features[feature + '_last_div_median'] = agg_features[feature] / agg_features[feature.replace('last', 'median')]
+
+        # Check if last and min are in the feature name and compute difference and division
+        elif 'last' in feature and feature.replace('last', 'min') in agg_features:
+            agg_features[feature + '_last_sub_min'] = agg_features[feature] - agg_features[feature.replace('last', 'min')]
+            agg_features[feature + '_last_div_min'] = agg_features[feature] / agg_features[feature.replace('last', 'min')]
+
+        # Check if last and max are in the feature name and compute difference and division
+        elif 'last' in feature and feature.replace('last', 'max') in agg_features:
+            agg_features[feature + '_last_sub_max'] = agg_features[feature] - agg_features[feature.replace('last', 'max')]
+            agg_features[feature + '_last_div_max'] = agg_features[feature] / agg_features[feature.replace('last', 'max')]
 
     return agg_features
 
