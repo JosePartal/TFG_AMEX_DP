@@ -278,4 +278,4 @@ print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scor
 import plotly.express as px
 fig = px.bar(pd.DataFrame(importances).T.sort_values(by=0, ascending=False).head(50), orientation='h')
 fig.show()
-# %%
+
