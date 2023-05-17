@@ -351,13 +351,18 @@ def feat_combined(data, groupby_var = 'customer_ID'):
     df_last_diffdiv = feat_last_diffdiv(data, cat_features, num_features, groupby_var)
     print('Last difference and division features done')
 
-    # Merge on customer_ID (index)
-    df_merged = df_last_diffdiv.merge(df_diff, how='inner', on='customer_ID').merge(df_lag, how='inner', on='customer_ID').merge(df_means, how='inner', on='customer_ID')
-    print('Merge done')
+    return df_diff, df_lag, df_means, df_last_diffdiv
 
-    del not_used, bin_features_1, bin_features_2, bin_features_3, df_diff, df_lag, df_means, df_last_diffdiv
+    # CREO QUE AQUÍ ME CREA UNA TUPLA Y NO SÉ POR QUÉ
 
-    return df_merged, cat_features, num_features
+    # # Merge on customer_ID (index)
+    # df_merged = df_last_diffdiv.merge(df_diff, how='inner', on='customer_ID').merge(df_lag, how='inner', on='customer_ID').merge(df_means, how='inner', on='customer_ID')
+    # df_merged = df_merged.reset_index(drop=False)
+    # print('Merge done')
+
+    # del not_used, bin_features_1, bin_features_2, bin_features_3, df_diff, df_lag, df_means, df_last_diffdiv
+
+    # return df_merged, cat_features, num_features
 
 
 # In[11]: Save the combined dataset in a parquet file
@@ -368,20 +373,23 @@ def save_combined(data, dataset_name: str): # dataset_name = 'train' or 'test'
     results_path.mkdir(exist_ok=True)
 
     # Name experiment
-    experiment_name = dataset_name + '_' + 'combined_dataset'
+    experiment_name ='combined_dataset'
     experiment_dir = results_path / experiment_name
     experiment_dir.mkdir(exist_ok=True)
 
     print(f'Saving combined dataset in {experiment_dir}')
 
     # Save the combined dataset in a parquet file
-    data.to_parquet(experiment_dir / 'combined_dataset.parquet.gzip', compression='gzip')
+    if dataset_name == 'test':
+        data.to_parquet(experiment_dir / 'test_combined_dataset.parquet')
+    elif dataset_name == 'train':
+        data.to_parquet(experiment_dir / 'train_combined_dataset.parquet')
     print('Combined dataset saved successfully')
 
 # %%
 # In[6]: data
-train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
-# test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
+# train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
+test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
 
 # In[7]: tests
 
@@ -419,3 +427,6 @@ train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-pr
 # mean_test2 = train.groupby('customer_ID')[num_features].apply(lambda x: x.iloc[-6:].mean() if len(x) >= 6 else pd.Series([np.nan]))
 
 # mean_test2
+
+# Drop all lag variables
+# train.drop(columns = [col for col in train.columns if 'lag' in col], inplace = True)
