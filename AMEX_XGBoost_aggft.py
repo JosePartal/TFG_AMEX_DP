@@ -32,18 +32,31 @@ import feature_engineering as fe
 # In[2]: Lectura de datos
 
 # Train
-train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
+train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/DATASETS/combined_dataset/train_combined_dataset.parquet')
 # Labels
 train_labels = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/train_labels.csv', low_memory=False)
 # Train + Labels
 # train_raw = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
 # train_raw = train_raw.drop(columns = ['customer_ID', 'S_2'])
 # Test
-test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
+test = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/DATASETS/combined_dataset/test_combined_dataset.parquet')
 # test_data = test_data.drop(columns = ['customer_ID', 'S_2'])
 
+# In[3]: Variables categóricas
 
-# In[3]: Lectura de datos agregados
+# cat_features = ['B_30', 'B_38', 'D_63', 'D_64', 'D_66', 'D_68', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126']
+
+# Como se han agrupado los datos, las categóricas tendrán el mismo nombre que las variables de la lista anterior que contengan seguidos de "_last" o "_first"
+# Por ejemplo, B_30_last, B_30_first, B_38_last, B_38_first, etc.
+
+# Lista de variables categóricas
+cat_features = ['B_30_last', 'B_30_first', 'B_38_last', 'B_38_first', 'D_63_last', 'D_63_first', 'D_64_last', 'D_64_first', 'D_66_last', 'D_66_first', 'D_68_last', 
+                'D_68_first', 'D_114_last', 'D_114_first', 'D_116_last', 'D_116_first', 'D_117_last', 'D_117_first', 'D_120_last', 'D_120_first', 'D_126_last', 'D_126_first']
+
+# Lista de variables (exlucyendo 'customer_ID)
+features = list(train.columns)
+features.remove('customer_ID')
+# features.remove('S_2')
 
 
 # In[4]: Métrica
@@ -105,26 +118,19 @@ def amex_metric_mod(y_true, y_pred):
 
 # In[5]: Codificación de las variables
 
-# Dummy encoding
+# Dummy encoding de las variables categóricas
 
-train_df_oh, test_df_oh, dummies_train, dummies_test = fe.dummy_encoding(train, test_data, cat_features)
+train_df_oh, test_df_oh, dummies_train, dummies_test = fe.dummy_encoding(train, test, cat_features)
 
-
+del train, test, dummies_test, dummies_train
 # In[6]: Separamos los datos en entrenamiento y test
 
 # Primero añadimos la variable target a train_df_oh
 train_df_oh_raw = train_df_oh.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
-train_df_oh_raw = train_df_oh_raw.groupby('customer_ID').tail(1).set_index('customer_ID') # Última observación
 
 # Definimos X e y
-X = train_df_oh_raw.drop(columns = ['S_2', 'target'])
+X = train_df_oh_raw.drop(columns = ['target']) # creo que no hace falta quitar S_2
 y = train_df_oh_raw['target']
-
-# # # Separamos los datos en entrenamiento y test
-# X_train, X_valid, y_train, y_valid = train_test_split(X, y, stratify = y, test_size = .20, random_state = 42, shuffle=True)
-
-# print('Datos entrenamiento: ', X_train.shape)
-# print('Datos test: ', X_valid.shape)
 
 
 # In[7]: Parámetros XGBoost
@@ -193,7 +199,7 @@ for fold, (train_index, valid_index) in enumerate(split):
     scores['AMEX'].append(AMEX_score)
 
     # Liberamos memoria
-    del X_train, X_valid, y_train, y_valid, dtrain, dvalid
+    # del X_train, X_valid, y_train, y_valid, dtrain, dvalid
     gc.collect()
 
 
