@@ -8,6 +8,9 @@ import numpy as np
 import time
 
 # Data visualization
+import matplotlib.pyplot as plt
+
+# Data visualization
 import gc
 
 # Time management
@@ -122,15 +125,26 @@ def amex_metric_mod(y_true, y_pred):
 
 train_df_oh, test_df_oh, dummies_train, dummies_test = fe.dummy_encoding(train, test, cat_features)
 
-del train, test, dummies_test, dummies_train
+del train, test #, dummies_test, dummies_train
+gc.collect()
+
 # In[6]: Separamos los datos en entrenamiento y test
 
 # Primero añadimos la variable target a train_df_oh
 train_df_oh_raw = train_df_oh.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
 
+# # Transform train_df_oh_raw inf values to zero
+train_df_oh_raw = train_df_oh_raw.replace([np.inf, -np.inf], 0)
+
+# # Transform test_df_oh inf values to nan
+# test_df_oh = test_df_oh.replace([np.inf, -np.inf], np.nan)
+
 # Definimos X e y
-X = train_df_oh_raw.drop(columns = ['target']) # creo que no hace falta quitar S_2
+X = train_df_oh_raw.drop(columns = ['target', 'customer_ID']) 
 y = train_df_oh_raw['target']
+
+del train_df_oh, test_df_oh, train_df_oh_raw
+gc.collect()
 
 
 # In[7]: Parámetros XGBoost
@@ -176,7 +190,7 @@ for fold, (train_index, valid_index) in enumerate(split):
     # Creamos el dataset de entrenamiento indicando las variables categóricas
     # (Cambiar a DeviceQuantileDMatrix, es mucho más rápido)
 
-    dtrain = xgb.DeviceQuantileDMatrix(X_train, label=y_train, feature_names=X_train.columns, nthread=-1, enable_categorical=True)
+    dtrain = xgb.QuantileDMatrix(X_train, label=y_train, feature_names=X_train.columns, nthread=-1, enable_categorical=True)
     dvalid = xgb.DMatrix(X_valid, label=y_valid, feature_names=X_valid.columns, nthread=-1, enable_categorical=True)
 
     # Entrenamos el modelo para el fold actual
@@ -199,7 +213,7 @@ for fold, (train_index, valid_index) in enumerate(split):
     scores['AMEX'].append(AMEX_score)
 
     # Liberamos memoria
-    # del X_train, X_valid, y_train, y_valid, dtrain, dvalid
+    del X_train, X_valid, y_train, y_valid, dtrain, dvalid
     gc.collect()
 
 
@@ -253,10 +267,29 @@ print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scor
 # sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
 
 
-# In[13]: Feature importance
+# In[13]: Feature importance I
 
 # Plot top 50 features using plotly express
 import plotly.express as px
-fig = px.bar(pd.DataFrame(importances).T.sort_values(by=0, ascending=False).head(50), orientation='h')
+fig = px.bar(pd.DataFrame(importances).T.sort_values(by=0, ascending=False), orientation='h')
 fig.show()
+# In[14]: Feature importance II
+
+# Plot feature importance using matplotlib adjusting the graph size to show 150 features
+plt.figure(figsize=(20, 30))
+xgb.plot_importance(xgb_model, ax=plt.gca(), max_num_features=150, height=0.8)
+plt.show()
+
+
+# In[15]: Feature importance III
+
+# CHeck variables that have 0 importance
+zero_importance = [k for k,v in xgb_model.get_score(importance_type='weight').items() if v == 0]
+print('Number of variables with 0 importance:', len(zero_importance))
+print('Variables with 0 importance:', zero_importance)
+
+# Save features and importance in a excel file with a column for the features and another for the importance
+importance_df = pd.DataFrame(importances).T.sort_values(by=0, ascending=False)
+importance_df.to_excel('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/feature_importance.xlsx', index=True)
+
 # %%
