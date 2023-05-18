@@ -365,7 +365,7 @@ def feat_combined(data, groupby_var = 'customer_ID'):
     # return df_merged, cat_features, num_features
 
 
-# In[11]: Save the combined dataset in a parquet file
+# In[11]: Utility functions II: Save the combined dataset in a parquet file
 
 def save_combined(data, dataset_name: str): # dataset_name = 'train' or 'test'
     # Create a directory to store the output files
@@ -386,10 +386,30 @@ def save_combined(data, dataset_name: str): # dataset_name = 'train' or 'test'
         data.to_parquet(experiment_dir / 'train_combined_dataset.parquet')
     print('Combined dataset saved successfully')
 
+
+# In[12]: Utility functions III: Load datasets
+
+def load_datasets(oh:bool):
+    # Labels
+    train_labels = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/train_labels.csv', low_memory=False)
+    if oh == False:
+        # Train
+        train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/DATASETS/combined_dataset/train_combined_dataset.parquet')
+        # Test
+        test = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/DATASETS/combined_dataset/test_combined_dataset.parquet')
+    else:
+        # Train
+        train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/DATASETS/combined_dataset/train_df_oh.parquet')
+        # Test
+        test = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/DATASETS/combined_dataset/test_df_oh.parquet')
+    return train_labels, train, test
+
+
+
 # %%
 # In[6]: data
 # train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
-test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
+# test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
 
 # In[7]: tests
 
