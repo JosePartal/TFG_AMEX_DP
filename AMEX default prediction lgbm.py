@@ -4,41 +4,26 @@
 
 # In[1]: Librerías
 
-# Store and organize output files
-from pathlib import Path
-
 # Data manipulation
 import pandas as pd 
 import numpy as np
+import gc
+
+# Time management
+import time
 
 # Data visualization
-import matplotlib as mpl  
 import matplotlib.pyplot as plt
 import seaborn as sns
-import plotly.graph_objects as go
 
 # Machine learning
-import imblearn
 import lightgbm as lgb
-from sklearn import preprocessing
-from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import StratifiedKFold 
-from sklearn.preprocessing import OrdinalEncoder
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from imblearn.under_sampling import RandomUnderSampler
-
-# Librerías árboles de decisión
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.model_selection import GridSearchCV 
-from sklearn.metrics import accuracy_score
-
-# Librerías Random Forest
-from sklearn.ensemble import RandomForestClassifier
-
-# Saving models
-import pickle
+from sklearn.metrics import accuracy_score  
+from sklearn.metrics import precision_score                         
+from sklearn.metrics import recall_score
+from sklearn.metrics import f1_score
 
 # Feature engineering functions
 import feature_engineering as fe
@@ -46,75 +31,21 @@ import feature_engineering as fe
 
 # In[2]: Lectura de datos
 
-# Train
-train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
-# Labels
-train_labels = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/train_labels.csv', low_memory=False)
-# Train + Labels
-train_raw = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
-train_raw = train_raw.drop(columns = ['customer_ID', 'S_2'])
-# Test
-test_data = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
-test_data = test_data.drop(columns = ['customer_ID', 'S_2'])
+train_labels, train, test = fe.load_datasets(oh=True)
 
 
 # In[3]: Tipos de variables
 
-# Recordemos, en primer lugar, que las siguientes variables eran categóricas:
+# Lista de variables categóricas
+# cat_features = ['B_30_last', 'B_30_first', 'B_38_last', 'B_38_first', 'D_63_last', 'D_63_first', 'D_64_last', 'D_64_first', 'D_66_last', 'D_66_first', 'D_68_last', 
+#                 'D_68_first', 'D_114_last', 'D_114_first', 'D_116_last', 'D_116_first', 'D_117_last', 'D_117_first', 'D_120_last', 'D_120_first', 'D_126_last', 'D_126_first']
 
-# `['B_30', 'B_38', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126', 'D_63', 'D_64', 'D_66', 'D_68']`
-
-# Y `[S_2]` es una variable temporal.
-
-# Variables categóricas
-categorical_features = ['B_30', 'B_38', 'D_63', 'D_64', 'D_66', 'D_68', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126']
-train_raw[categorical_features] = train_raw[categorical_features].astype("category")
-test_data[categorical_features] = test_data[categorical_features].astype("category")
-
-features = train.drop(['customer_ID', 'S_2'], axis = 1).columns.to_list()
-# Numerical features
-numerical_features = [col for col in features if col not in categorical_features]
+# Lista de variables (exlucyendo 'customer_ID)
+features = list(train.columns)
+features.remove('customer_ID')
 
 
-# In[4]: Detección de missings
-
-# Veamos la cantidad y porcentaje de datos faltantes tenemos en cada variable
-pd_series_null_columns = train_raw.isnull().sum().sort_values(ascending=False)
-pd_series_null_rows = train_raw.isnull().sum(axis=1).sort_values(ascending=False)
-
-
-pd_null_columnas = pd.DataFrame(pd_series_null_columns, columns=['nulos_columnas'])     
-pd_null_filas = pd.DataFrame(pd_series_null_rows, columns=['nulos_filas'])  
-pd_null_filas['target'] = train_raw['target'].copy()
-pd_null_columnas['porcentaje_columnas'] = pd_null_columnas['nulos_columnas']/train_raw.shape[0]
-pd_null_filas['porcentaje_filas']= pd_null_filas['nulos_filas']/train_raw.shape[1]
-
-pd_null_columnas
-
-#Creemos un vector de variables con datos faltantes
-
-threshold = 0
-list_vars_not_null = list(pd_null_columnas[pd_null_columnas['porcentaje_columnas'] == threshold].index)
-list_var_null = list(pd_null_columnas[pd_null_columnas['porcentaje_columnas'] > threshold].index)
-train_data = train_raw.loc[:, list_vars_not_null]
-list_var_null
-
-tmp = train_raw.isna().sum().div(len(train_raw)).mul(100).sort_values(ascending=False)
-
-plt.style.use('Solarize_Light2')
-fig, ax = plt.subplots(2,1, figsize=(25,10))
-sns.barplot(x=tmp[:100].index, y=tmp[:100].values, ax=ax[0])
-sns.barplot(x=tmp[100:].index, y=tmp[100:].values, ax=ax[1])
-ax[0].set_ylabel("Percentage [%]"), ax[1].set_ylabel("Percentage [%]")
-ax[0].tick_params(axis='x', rotation=90); ax[1].tick_params(axis='x', rotation=90)
-plt.suptitle("Amount of missing data")
-plt.tight_layout()
-plt.show()
-
-del tmp, fig, ax
-
-
-# In[5]: Métrica
+# In[4]: Métrica
 
 def amex_metric(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
 
@@ -147,64 +78,44 @@ def amex_metric(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
 
     return 0.5 * (g + d)
 
-# In[6]: Semillas aleatorias
+def amex_metric_mod(y_true, y_pred):
 
-import random  
-import os
-seed = 42
-def seed_everything(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    labels     = np.transpose(np.array([y_true, y_pred]))
+    labels     = labels[labels[:, 1].argsort()[::-1]]
+    weights    = np.where(labels[:,0]==0, 20, 1)
+    cut_vals   = labels[np.cumsum(weights) <= int(0.04 * np.sum(weights))]
+    top_four   = np.sum(cut_vals[:,0]) / np.sum(labels[:,0])
 
-# In[7]: Codificación de las variables
+    gini = [0,0]
+    for i in [1,0]:
+        labels         = np.transpose(np.array([y_true, y_pred]))
+        labels         = labels[labels[:, i].argsort()[::-1]]
+        weight         = np.where(labels[:,0]==0, 20, 1)
+        weight_random  = np.cumsum(weight / np.sum(weight))
+        total_pos      = np.sum(labels[:, 0] *  weight)
+        cum_pos_found  = np.cumsum(labels[:, 0] * weight)
+        lorentz        = cum_pos_found / total_pos
+        gini[i]        = np.sum((lorentz - weight_random) * weight)
 
-# Creamos una copia de train_data para trabajar con ella
-train_data_2 = train_raw.copy()
-
-# Codificación de las variables
-# Meto un label encoder por tener menos variables, pero habría que usar onehot porque no sé si existe una relación de orden entre las categorías
-
-# enc = LabelEncoder()
-# for cat_feat in categorical_features:
-#     train_data_2[cat_feat] = enc.fit_transform(train_data_2[cat_feat])
-#     test_data[cat_feat] = enc.transform(test_data[cat_feat])
-
-# Error con label encoder porque hay categorías nuevas en test. Tal vez al agrupar por id pueda solucionarse. Paso a onehot
-
-# Onehot encoding uising sklearn
-
-enc = OneHotEncoder(handle_unknown='ignore')
-# Ajustar y transformar los datos de entrenamiento
-train_oh = enc.fit_transform(train_data_2[categorical_features])
-# Transformar los datos de test
-test_oh = enc.transform(test_data[categorical_features])
-
-# Convertir los datos codificados a un DataFrame y añadir los nombres de las columnas
-train_oh = pd.DataFrame(train_oh.toarray(), columns=enc.get_feature_names_out(categorical_features))
-test_oh = pd.DataFrame(test_oh.toarray(), columns=enc.get_feature_names_out(categorical_features))
-
-# Unir los datos codificados con los datos numéricos
-train_encoded = train_data_2.join(train_oh)
-test_encoded = test_data.join(test_oh)
-
-del train_data_2
-
-# In[8]: Separamos los datos
-
-X = train_encoded.drop(['target'],axis=1)
-y = train_encoded['target']
-
-# Dividimos los datos en entrenamiento y test (80 training, 20 test)
-X_train, X_test, y_train, y_test = train_test_split(X, y, stratify = y, test_size = .20, random_state = seed, shuffle=True)
-
-print('Datos entrenamiento: ', X_train.shape)
-print('Datos test: ', X_test.shape)
+    return 0.5 * (gini[1]/gini[0] + top_four)
 
 
-# In[9]: Parámetros LGBM
+# In[5]: Separamos datos 
 
-# Parámetros LGBM
+# Primero añadimos la variable target a train_df_oh
+train_df_oh = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
+
+# Definimos X e y
+X = train_df_oh.drop(columns = ['target', 'customer_ID']) 
+y = train_df_oh['target']
+
+del train_df_oh, test
+gc.collect()
+
+
+# In[6]: Parámetros LGBM
+
+# Parámetros LGBM (usando dart)
 
 LGBM_params = {
                   'objective' : 'binary',
@@ -228,117 +139,159 @@ LGBM_params = {
                   'force_row_wise' : True,
                   'verbosity' : 1,
     }
+# # https://www.kaggle.com/code/ragnar123/amex-lgbm-dart-cv-0-7977#Training-&-Inference
+# LGBM_params2 = {
+#         'objective': 'binary',
+#         'metric': 'binary_logloss',
+#         'boosting': 'dart',
+#         'seed': 42,
+#         'num_leaves': 100,
+#         'learning_rate': 0.01,
+#         'feature_fraction': 0.20,
+#         'bagging_freq': 10,
+#         'bagging_fraction': 0.50,
+#         'n_jobs': -1,
+#         'lambda_l2': 2,
+#         'min_data_in_leaf': 40,
+#         }
 
-from lightgbm import callback
-callbacks = [callback.early_stopping(patience=100)]
-
-# No es necesario escalar en árboles de decisión
-
-# # In[9]: Escalamos (con los datos de train)
-# scaler = preprocessing.StandardScaler().fit(X_train)
-
-# X_train_scaled = pd.DataFrame(scaler.transform(X_train), columns = X_train.columns, index = X_train.index)
-# X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns = X_test.columns, index = X_test.index)
-
-# In[10]: Imputación de missings
-
-# # Para la imputación de missings, vamos a usar KNNImputer. Daremos más peso a los vecinos más próximos.
-# from sklearn.impute import KNNImputer
-# imputer = KNNImputer(n_neighbors=5, weights="distance")
-# X_train_nomis = imputer.fit_transform(X_train_scaled)
-# X_test = imputer.fit_transform(X_test_scaled)
-
-# In[11]: Undersampling
-
-# from imblearn.under_sampling import RandomUnderSampler
-
-# under_sampler = RandomUnderSampler(random_state = seed)
-# X_train_res, y_train_res = under_sampler.fit_resample(X_train_scaled, y_train)
+# In[7]: Hyperparameter tuning
 
 
-# In[12]: Hyperparameter tuning
+# In[8]: LGBM con StratifiedKFold
+
+# Definimos los folds
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+split = skf.split(X, y)
+
+# Diccionario para guardar los scores de cada fold
+scores = {'AMEX': [], 'Accuracy': [], 'Recall': [], 'Precision': [], 'F1': []}
+
+# Definimos las listas para guardar las predicciones
+y_pred_train = []
+y_pred_valid = []
+
+# Definimos las listas para guardar los modelos
+models = []
+
+# Definimos las listas para guardar las importancias de las variables
+feature_importances = pd.DataFrame()
+feature_importances['feature'] = features
+
+# Generamos la fecha para guardar los outpus en el mismo directorio
+current_time = time.strftime('%Y%m%d_%H%M%S')
+
+# Creamos el bucle para hacer cross validation
+for fold, (train_index, valid_index) in enumerate(split):
+
+    # Mensajes informativos
+    print('-'*50)
+    print('Fold:',fold+1)
+    print( 'Train size:', len(train_index), 'Validation size:', len(valid_index))
+    print('-'*50)
+
+    # Separamos los datos en entrenamiento y validación
+    X_train, X_valid = X.iloc[train_index], X.iloc[valid_index]
+    y_train, y_valid = y.iloc[train_index], y.iloc[valid_index]
+
+    # Creamos el dataset de entrenamiento incluyendo las variables categóricas
+    lgb_train = lgb.Dataset(X_train, y_train)
+
+    # Creamos el dataset de validación incluyendo las variables categóricas
+    lgb_valid = lgb.Dataset(X_valid, y_valid)
+
+    # Entrenamos el modelo
+    model_lgb = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=6000, valid_sets=[lgb_train, lgb_valid],
+                            callbacks=[lgb.log_evaluation(period=100)])
+    
+    # Guardamos el modelo
+    models.append(model_lgb)
+    fe.save_model_fe('LGBM', model_lgb, fold, current_time)
+    
+    # Importancia de las variables
+    feature_importances[f'fold_{fold + 1}'] = model_lgb.feature_importance(importance_type='split')
+
+    # Predecimos sobre el conjunto de validación
+    y_pred = model_lgb.predict(X_valid)
+
+    # Guardamos las predicciones
+    y_pred_train.append(model_lgb.predict(X_train))
+
+    # Evaluamos las predicciones con la métrica customizada
+    AMEX_score = amex_metric_mod(y_valid.values, y_pred)
+    print('Métrica de Kaggle para el fold {fold}:', AMEX_score)
+    scores['AMEX'].append(AMEX_score)
+
+    # Libera memoria
+    del X_train, X_valid, y_train, y_valid, lgb_train, lgb_valid
+    gc.collect()
+
+# Mostramos los resultados
+print('-'*50)
+print('Métrica de Kaggle:', np.mean(scores['AMEX']))
 
 
-# In[13]: LGBM
+# In[9]: Feature importance
 
-# Tiempo de inicio
-import time
-start_time = time.time()
+# Plot de las 150 variables más importantes
+feature_importances['average'] = feature_importances[[f'fold_{fold + 1}' for fold in range(skf.n_splits)]].mean(axis=1)
+feature_importances.sort_values(by='average', ascending=False, inplace=True)
+feature_importances.reset_index(drop=True, inplace=True)
 
-# Creamos el dataset de entrenamiento
-lgb_train = lgb.Dataset(X_train, y_train, categorical_feature=categorical_features)
+plt.figure(figsize=(10, 30))
+sns.barplot(x='average', y='feature', data=feature_importances.head(150))
+plt.title('150 variables más importantes')
+plt.tight_layout()
+plt.savefig(f'feature_importances_{current_time}.png')
+plt.show()
 
-# Creamos el dataset de test
-lgb_test = lgb.Dataset(X_test, y_test, categorical_feature=categorical_features)
-
-# Entrenamos el modelo
-model_train = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=2000, valid_sets=[lgb_train, lgb_test], 
-                        verbose_eval=100, callbacks=callbacks)
-
-# Tiempo de ejecución
-print('Tiempo de ejecución: ', time.time() - start_time)
+# Guardamos el dataframe de importancia de variables en un archivo excel
+feature_importances.to_excel(f'feature_importances_{current_time}.xlsx', index=False)
 
 
 # In[13]: Predicciones
 
-start_time = time.time()
-
-# Predicciones
-y_pred = model_train.predict(X_test)
-
-print('Tiempo de ejecución: ', time.time() - start_time)
 
 
-# In[14]: Evaluación usando la métrica
+# # In[16]: Curva ROC de cada fold
 
-# Evaluación usando la métrica
-# print('Gini: ', amex_metric(y_test, y_pred))
+# # Curva ROC de cada fold
+# from sklearn.metrics import roc_curve, auc
+# fpr, tpr, thresholds = roc_curve(y_test, y_pred)
+# roc_auc = auc(fpr, tpr)
 
-# In[15]: Save model
+# plt.figure()
+# lw = 2
+# plt.plot(fpr, tpr, color='darkorange',
+#             lw=lw, label='ROC curve (area = %0.2f)' % roc_auc)
+# plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+# plt.xlim([0.0, 1.0])
+# plt.ylim([0.0, 1.05])
+# plt.xlabel('False Positive Rate')
+# plt.ylabel('True Positive Rate')
+# plt.title('ROC')
+# plt.legend(loc="lower right")
+# plt.show()
 
-# Save model
-import pickle
-pickle.dump(model_train, open('model_train.pkl', 'wb'))
+# # In[17]: Matriz de confusión
 
-# In[16]: Curva ROC de cada fold
+# from sklearn.metrics import confusion_matrix
+# import seaborn as sns
 
-# Curva ROC de cada fold
-from sklearn.metrics import roc_curve, auc
-fpr, tpr, thresholds = roc_curve(y_test, y_pred)
-roc_auc = auc(fpr, tpr)
+# cm = confusion_matrix(y_test, y_pred.round())
+# sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
 
-plt.figure()
-lw = 2
-plt.plot(fpr, tpr, color='darkorange',
-            lw=lw, label='ROC curve (area = %0.2f)' % roc_auc)
-plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('ROC')
-plt.legend(loc="lower right")
-plt.show()
+# # In[18]: Feature importance
 
-# In[17]: Matriz de confusión
-
-from sklearn.metrics import confusion_matrix
-import seaborn as sns
-
-cm = confusion_matrix(y_test, y_pred.round())
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-
-# In[18]: Feature importance
-
-# Feature importance top 50
-lgb.plot_importance(model_train, max_num_features=50, figsize=(10,10))
+# # Feature importance top 50
+# lgb.plot_importance(model_train, max_num_features=50, figsize=(10,10))
 
 
-# In[19]: Metrica Gini
+# # In[19]: Metrica Gini
 
-y_pred1=pd.DataFrame(data={'prediction':y_pred})
-y_true1=pd.DataFrame(data={'target':y_test.reset_index(drop=True)})
+# y_pred1=pd.DataFrame(data={'prediction':y_pred})
+# y_true1=pd.DataFrame(data={'target':y_test.reset_index(drop=True)})
 
-metric_score = amex_metric(y_true1, y_pred1)
-print('Gini: ', metric_score)
-# %%
+# metric_score = amex_metric(y_true1, y_pred1)
+# print('Gini: ', metric_score)
+# # %%
