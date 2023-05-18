@@ -5,13 +5,10 @@
 # Data manipulation
 import pandas as pd 
 import numpy as np
-import time
+import gc
 
 # Data visualization
 import matplotlib.pyplot as plt
-
-# Data visualization
-import gc
 
 # Time management
 import time
@@ -34,16 +31,7 @@ import feature_engineering as fe
 
 # In[2]: Lectura de datos
 
-# Train
-train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/DATASETS/combined_dataset/train_combined_dataset.parquet')
-# Labels
-train_labels = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/train_labels.csv', low_memory=False)
-# Train + Labels
-# train_raw = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
-# train_raw = train_raw.drop(columns = ['customer_ID', 'S_2'])
-# Test
-test = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/DATASETS/combined_dataset/test_combined_dataset.parquet')
-# test_data = test_data.drop(columns = ['customer_ID', 'S_2'])
+train_labels, train, test = fe.load_datasets(oh=True)
 
 # In[3]: Variables categóricas
 
@@ -128,13 +116,13 @@ train_df_oh, test_df_oh, dummies_train, dummies_test = fe.dummy_encoding(train, 
 del train, test #, dummies_test, dummies_train
 gc.collect()
 
-# In[6]: Separamos los datos en entrenamiento y test
+# In[6]: Separamos los datos 
 
 # Primero añadimos la variable target a train_df_oh
 train_df_oh_raw = train_df_oh.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
 
-# # Transform train_df_oh_raw inf values to zero
-train_df_oh_raw = train_df_oh_raw.replace([np.inf, -np.inf], 0)
+# # # Transform train_df_oh_raw inf values to zero
+# train_df_oh_raw = train_df_oh_raw.replace([np.inf, -np.inf], 0)
 
 # # Transform test_df_oh inf values to nan
 # test_df_oh = test_df_oh.replace([np.inf, -np.inf], np.nan)
