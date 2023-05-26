@@ -197,7 +197,7 @@ for fold, (train_index, valid_index) in enumerate(split):
     
     # Calculamos el score para el fold actual con la métrica customizada
     AMEX_score = amex_metric_mod(y_valid.values, y_pred) # DA ERROR LA ORIGINAL
-    print('Métrica de Kaggle para el fold {fold}:', AMEX_score)
+    print(f'Métrica de Kaggle para el fold {fold}:', AMEX_score)
     scores['AMEX'].append(AMEX_score)
 
     # Liberamos memoria
@@ -271,7 +271,7 @@ plt.show()
 
 # In[15]: Feature importance III
 
-# CHeck variables that have 0 importance
+# Check variables that have 0 importance
 zero_importance = [k for k,v in xgb_model.get_score(importance_type='weight').items() if v == 0]
 print('Number of variables with 0 importance:', len(zero_importance))
 print('Variables with 0 importance:', zero_importance)
@@ -280,4 +280,27 @@ print('Variables with 0 importance:', zero_importance)
 importance_df = pd.DataFrame(importances).T.sort_values(by=0, ascending=False)
 importance_df.to_excel('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/feature_importance.xlsx', index=True)
 
+
+# In[16]: Test predictions (pruebas)
+
+# Load fold 0 model (best model) C:\Users\Jose\Documents\UNIVERSIDAD\TFG\MATEMATICAS\PYTHON\MODELOS\XGBoost_20230517_175554
+xgb_model = xgb.Booster()
+xgb_model.load_model('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_20230517_175554/XGBoost_model_0.json')
+print('Model loaded')
+
+# Predict on test set
+X_test = test[features]
+dtest = xgb.DMatrix(X_test, feature_names=X_test.columns, nthread=-1, enable_categorical=True)
+y_pred_test = xgb_model.predict(dtest)
+print('Prediction done')
+
+
+# In[17]: Submission
+
+# Create submission file
+submission = pd.DataFrame({'customer_ID': test['customer_ID'], 'prediction': y_pred_test})
+submission.to_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/submission.csv', index=False)
+
+# Display submission file head
+submission.head()
 # %%
