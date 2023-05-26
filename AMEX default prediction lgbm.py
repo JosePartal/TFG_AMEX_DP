@@ -123,7 +123,7 @@ LGBM_params = {
                   'boosting': 'dart',
                   'max_depth' : -1,
                   'num_leaves' : 64,
-                  'learning_rate' : 0.1,
+                  'learning_rate' : 0.2,
                   'bagging_freq': 5,
                   'bagging_fraction' : 0.75,
                   'feature_fraction' : 0.05,
@@ -154,6 +154,26 @@ LGBM_params = {
 #         'lambda_l2': 2,
 #         'min_data_in_leaf': 40,
 #         }
+
+# lgb_params = {
+#     'boosting_type': 'dart',
+#     'objective': 'cross_entropy', 
+#     'metric': ['AUC'],
+#     'subsample': 0.8,  
+#     'subsample_freq': 1,
+#     'learning_rate': 0.01, 
+#     'num_leaves': 2 ** 6, 
+#     'min_data_in_leaf': 2 ** 11, 
+#     'feature_fraction': 0.2, 
+#     'feature_fraction_bynode':0.3,
+#     'first_metric_only': True,
+#     'n_estimators': 17001,  # -> 5000 for gbdt 
+#     'boost_from_average': False,
+#     'early_stopping_rounds': 300,
+#     'verbose': -1,
+#     'num_threads': -1,
+#     'seed': SEED,
+# }
 
 # In[7]: Hyperparameter tuning
 
@@ -219,7 +239,7 @@ for fold, (train_index, valid_index) in enumerate(split):
 
     # Evaluamos las predicciones con la métrica customizada
     AMEX_score = amex_metric_mod(y_valid.values, y_pred)
-    print('Métrica de Kaggle para el fold {fold}:', AMEX_score)
+    print(f'Métrica de Kaggle para el fold {fold}:', AMEX_score)
     scores['AMEX'].append(AMEX_score)
 
     # Libera memoria
@@ -228,7 +248,7 @@ for fold, (train_index, valid_index) in enumerate(split):
 
 # Mostramos los resultados
 print('-'*50)
-print('Métrica de Kaggle:', np.mean(scores['AMEX']))
+print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scores['AMEX']))
 
 
 # In[9]: Feature importance

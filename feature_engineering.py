@@ -405,7 +405,6 @@ def load_datasets(oh:bool):
     return train_labels, train, test
 
 
-
 # %%
 # In[6]: data
 # train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
