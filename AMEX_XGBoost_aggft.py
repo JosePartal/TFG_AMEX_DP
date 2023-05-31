@@ -2,16 +2,16 @@
 
 # In[1]: Librerías
 
-# Data manipulation
+# Manipulación de datos
 import pandas as pd 
 import numpy as np
 import gc
 
-# Data visualization
+# Visualización
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Time management
+# Tiempo
 import time
 
 # Machine learning
@@ -26,7 +26,7 @@ from sklearn.metrics import f1_score
 # Librerías árboles de decisión
 from sklearn.metrics import accuracy_score
 
-# Feature engineering functions
+# Funciones ingeniería de variables
 import feature_engineering as fe
 
 
@@ -116,8 +116,8 @@ if oh == False:
     train_df_oh, test_df_oh, dummies_train, dummies_test = fe.dummy_encoding(train, test, cat_features)
     del train, test, dummies_test, dummies_train, oh
 elif oh == True:
-    train_df_oh, test_df_oh = train, test, oh
-    del train, test     
+    train_df_oh, test_df_oh = train, test
+    del train, test, oh
 gc.collect()
 
 # In[6]: Separamos los datos 
@@ -157,61 +157,66 @@ xgb_parms = {
 
 # In[8]: XGBoost con Stratified K-Fold Cross Validation
 
-# Vamos a hacer un stratified k-fold cross validation con 5 folds
-skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-importances = {} # Diccionario para guardar las importancias de cada fold
-scores = {'AMEX': [], 'Accuracy': [], 'Recall': [], 'Precision': [], 'F1': []} # Diccionario para guardar los scores de cada fold
-split = skf.split(X, y)
-
-# Generamos la fecha para guardar los outpus en el mismo directorio
+# Diccionario para guardar las importancias de cada fold
+importances = {} 
+# Diccionario para guardar los scores de cada fold
+scores = {'AMEX': []} 
+# Necesitamos el tiempo para generar la carpeta donde guardar los modelos
 current_time = time.strftime('%Y%m%d_%H%M%S')
 
-# Creamos el bucle para hacer el cross validation
-for fold, (train_index, valid_index) in enumerate(split):
+def xgb_model_func(X_input, y_input, folds):
 
-    # Mensajes informativos
+    # Vamos a hacer un stratified k-fold cross validation con 5 folds
+    skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
+    split = skf.split(X_input, y)
+
+    # Creamos el bucle para hacer el cross validation
+    for fold, (train_index, valid_index) in enumerate(split):
+
+        # Mensajes informativos
+        print('-'*50)
+        print('Fold:',fold+1)
+        print( 'Train size:', len(train_index), 'Validation size:', len(valid_index))
+        print('-'*50)
+
+        # Separamos los datos en entrenamiento y validación
+        X_train, X_valid = X_input.iloc[train_index], X_input.iloc[valid_index]
+        y_train, y_valid = y_input.iloc[train_index], y_input.iloc[valid_index]
+
+        # Creamos el dataset de entrenamiento indicando las variables categóricas
+        # (Cambiar a DeviceQuantileDMatrix, es mucho más rápido)
+
+        dtrain = xgb.QuantileDMatrix(X_train, label=y_train, feature_names=X_train.columns, nthread=-1, enable_categorical=True)
+        dvalid = xgb.DMatrix(X_valid, label=y_valid, feature_names=X_valid.columns, nthread=-1, enable_categorical=True)
+
+        # Entrenamos el modelo para el fold actual
+
+        xgb_model = xgb.train(xgb_parms, dtrain, num_boost_round=2500, evals=[(dtrain,'train'),(dvalid,'test')],
+                                early_stopping_rounds=50, verbose_eval=50) # feval ver custom metric https://www.kaggle.com/code/jiweiliu/rapids-cudf-feature-engineering-xgb
+        
+        # Guardamos el modelo
+        fe.save_model_fe('XGBoost', xgb_model, fold, current_time) 
+
+        # Feature importance para el fold actual
+        importances[fold] = xgb_model.get_score(importance_type='weight') # ‘weight’ - the number of times a feature is used to split the data across all trees.
+
+        # Predecimos sobre el conjunto de validación
+        y_pred = xgb_model.predict(dvalid)
+        
+        # Calculamos el score para el fold actual con la métrica customizada
+        AMEX_score = amex_metric_mod(y_valid.values, y_pred) # DA ERROR LA ORIGINAL
+        print(f'Métrica de Kaggle para el fold {fold}:', AMEX_score)
+        scores['AMEX'].append(AMEX_score)
+
+        # Liberamos memoria
+        del X_train, X_valid, y_train, y_valid, dtrain, dvalid
+        gc.collect()
+
+    # Mostramos los resultados
     print('-'*50)
-    print('Fold:',fold+1)
-    print( 'Train size:', len(train_index), 'Validation size:', len(valid_index))
-    print('-'*50)
+    print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scores['AMEX']))
 
-    # Separamos los datos en entrenamiento y validación
-    X_train, X_valid = X.iloc[train_index], X.iloc[valid_index]
-    y_train, y_valid = y.iloc[train_index], y.iloc[valid_index]
-
-    # Creamos el dataset de entrenamiento indicando las variables categóricas
-    # (Cambiar a DeviceQuantileDMatrix, es mucho más rápido)
-
-    dtrain = xgb.QuantileDMatrix(X_train, label=y_train, feature_names=X_train.columns, nthread=-1, enable_categorical=True)
-    dvalid = xgb.DMatrix(X_valid, label=y_valid, feature_names=X_valid.columns, nthread=-1, enable_categorical=True)
-
-    # Entrenamos el modelo para el fold actual
-
-    xgb_model = xgb.train(xgb_parms, dtrain, num_boost_round=2500, evals=[(dtrain,'train'),(dvalid,'test')],
-                            early_stopping_rounds=50, verbose_eval=50) # feval ver custom metric https://www.kaggle.com/code/jiweiliu/rapids-cudf-feature-engineering-xgb
-    
-    # Guardamos el modelo
-    experiment_dir = fe.save_model_fe('XGBoost', xgb_model, fold, current_time) # Crea una carpeta para cada minuto, cambiar para que lo guarde todo en la misma
-
-    # Feature importance para el fold actual
-    importances[fold] = xgb_model.get_score(importance_type='weight') # ‘weight’ - the number of times a feature is used to split the data across all trees.
-
-    # Predecimos sobre el conjunto de validación
-    y_pred = xgb_model.predict(dvalid)
-    
-    # Calculamos el score para el fold actual con la métrica customizada
-    AMEX_score = amex_metric_mod(y_valid.values, y_pred) # DA ERROR LA ORIGINAL
-    print(f'Métrica de Kaggle para el fold {fold}:', AMEX_score)
-    scores['AMEX'].append(AMEX_score)
-
-    # Liberamos memoria
-    del X_train, X_valid, y_train, y_valid, dtrain, dvalid
-    gc.collect()
-
-
-# Mostramos los resultados
-print('-'*50)
-print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scores['AMEX']))
+xgb_model_func(X, y, 5)
 
 
 # # In[10]: Save model
@@ -259,52 +264,85 @@ print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scor
 # sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
 
 
-# In[13]: Feature importance I: Plot
+# In[13]: Feature importance:
 
-# Compute the average importance of each feature across all folds and plot top 150 using matplotlib
-importances_df = pd.DataFrame(importances).T
-mean_importances = importances_df.mean(axis=0).sort_values(ascending=False)
-plt.figure(figsize=(10, 30))
-sns.barplot(x=mean_importances.values[:150], y=mean_importances.index[:150])
-plt.title('Feature Importances over {} folds'.format(len(importances)))
-plt.show()
+def fi_func(importances, current_time):
+    # Importancia media de cada variable
+    importances_df = pd.DataFrame(importances).T
+    mean_importances = importances_df.mean(axis=0).sort_values(ascending=False)
+
+    # Plot top 150 variables
+    plt.figure(figsize=(10, 30))
+    sns.barplot(x=mean_importances.values[:150], y=mean_importances.index[:150])
+    plt.title('Feature Importances over {} folds (top 150)'.format(len(importances)))
+    plt.savefig(f'C:\Users\Jose\Documents\UNIVERSIDAD\TFG\MATEMATICAS\PYTHON\MODELOS\XGBoost_{current_time}/feature_importance_150.png')
+    plt.show()
+
+    # Plot top 50 variables
+    plt.figure(figsize=(10, 30))
+    sns.barplot(x=mean_importances.values[:50], y=mean_importances.index[:50])
+    plt.title('Feature Importances over {} folds (top 50)'.format(len(importances)))
+    plt.savefig(f'C:\Users\Jose\Documents\UNIVERSIDAD\TFG\MATEMATICAS\PYTHON\MODELOS\XGBoost_{current_time}/feature_importance_150.png')
+    plt.show()
+
+    # Variables con importancia 0
+    zero_importance_features = [feature for feature in X.columns if feature not in mean_importances.index]
+    print('There are {} features with 0 importance'.format(len(zero_importance_features)))
+
+    # Añadimos la media al dataframe
+    importances_df = importances_df.T
+    importances_df['mean_importance'] = mean_importances
+
+    # Añadimos las variables con importancia 0 al dataframe (rellenamos con NaN para consistencia)
+    importances_df = importances_df.append(pd.DataFrame(index=zero_importance_features))
+    importances_df['mean_importance'].fillna(0, inplace=True)
+
+    # Guardamos el dataframe en un excel
+    importances_df.to_excel(f'C:\Users\Jose\Documents\UNIVERSIDAD\TFG\MATEMATICAS\PYTHON\MODELOS\XGBoost_{current_time}/feature_importance.xlsx', index=True)
+
+    return importances_df, zero_importance_features
+
+importances_df, zero_importance_features = fi_func(importances, current_time)
 
 
-# In[14]: Feature importance II: Zero importance features and save to excel
+# In[15]: Remodelado eliminando las variables con importancia 0
 
-# Check variables that have mean importance of 0 across all folds. As XGBoost don't save features with 0 importance,
-# We need to check which features from the total features list are not in the mean_importances list
-zero_importance_features = [feature for feature in features if feature not in mean_importances.index]
-print('There are {} features with 0 importance'.format(len(zero_importance_features)))
+# Diccionario para guardar las importancias de cada fold
+importances = {} 
+# Diccionario para guardar los scores de cada fold
+scores = {'AMEX': []} 
+# Necesitamos el tiempo para generar la carpeta donde guardar los modelos
+current_time = time.strftime('%Y%m%d_%H%M%S')
 
-# Save features and importance in a excel file with a column for the features and another for the importance
-importance_df = pd.DataFrame(importances).T.sort_values(by=0, ascending=False)
-importance_df.to_excel(f'{experiment_dir}/feature_importance.xlsx', index=True)
+# Eliminamos las variables con importancia 0 de X
+X_0_out = X.drop(columns=zero_importance_features)
 
+# Hacemos de nuevo un stratified k-fold cross validation con 5 folds bajo la misma semilla para comparar resultados
+xgb_model_func(X_0_out, y, 5)
 
-# In[15]: Feature importance III
+importances_df, zero_importance_features = fi_func(importances, current_time)
 
 
 # In[16]: Test predictions (pruebas) --> Agregar modelos para hacer el ensemble y evitar overfitting
 
-# Load fold 0 model (best model) C:\Users\Jose\Documents\UNIVERSIDAD\TFG\MATEMATICAS\PYTHON\MODELOS\XGBoost_20230517_175554
-xgb_model = xgb.Booster()
-xgb_model.load_model('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_20230517_175554/XGBoost_model_0.json')
-print('Model loaded')
+# # Load fold 0 model (best model) C:\Users\Jose\Documents\UNIVERSIDAD\TFG\MATEMATICAS\PYTHON\MODELOS\XGBoost_20230517_175554
+# xgb_model = xgb.Booster()
+# xgb_model.load_model('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_20230517_175554/XGBoost_model_0.json')
+# print('Model loaded')
 
-# Predict on test set
-X_test = test[features]
-dtest = xgb.DMatrix(X_test, feature_names=X_test.columns, nthread=-1, enable_categorical=True)
-y_pred_test = xgb_model.predict(dtest)
-print('Prediction done')
+# # Predict on test set
+# X_test = test[features]
+# dtest = xgb.DMatrix(X_test, feature_names=X_test.columns, nthread=-1, enable_categorical=True)
+# y_pred_test = xgb_model.predict(dtest)
+# print('Prediction done')
 
 
-# In[17]: Submission
+# # In[17]: Submission
 
-# Create submission file
-submission = pd.DataFrame({'customer_ID': test['customer_ID'], 'prediction': y_pred_test})
-submission.to_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/submission.csv', index=False)
+# # Create submission file
+# submission = pd.DataFrame({'customer_ID': test['customer_ID'], 'prediction': y_pred_test})
+# submission.to_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/submission.csv', index=False)
 
-# Display submission file head
-submission.head()
+# # Display submission file head
+# submission.head()
 # %%
