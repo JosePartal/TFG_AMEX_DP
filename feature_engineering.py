@@ -37,6 +37,8 @@ def save_model_fe(algorithm: str, model, fold, current_time):
 
     print('Model saved successfully')
 
+    return experiment_dir
+
 
 # In[3]: Feature engineering functions I: Feature types
 
