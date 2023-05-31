@@ -9,6 +9,7 @@ import gc
 
 # Data visualization
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Time management
 import time
@@ -30,8 +31,9 @@ import feature_engineering as fe
 
 
 # In[2]: Lectura de datos
+oh = True
 
-train_labels, train, test = fe.load_datasets(oh=True)
+train_labels, train, test = fe.load_datasets(oh)
 
 # In[3]: Variables categóricas
 
@@ -109,11 +111,13 @@ def amex_metric_mod(y_true, y_pred):
 
 # In[5]: Codificación de las variables
 
-# Dummy encoding de las variables categóricas
-
-train_df_oh, test_df_oh, dummies_train, dummies_test = fe.dummy_encoding(train, test, cat_features)
-
-del train, test #, dummies_test, dummies_train
+# Dummy encoding de las variables categóricas (ya tengo los dataframes finales, omitir)
+if oh == False:
+    train_df_oh, test_df_oh, dummies_train, dummies_test = fe.dummy_encoding(train, test, cat_features)
+    del train, test, dummies_test, dummies_train, oh
+elif oh == True:
+    train_df_oh, test_df_oh = train, test, oh
+    del train, test     
 gc.collect()
 
 # In[6]: Separamos los datos 
@@ -155,7 +159,7 @@ xgb_parms = {
 
 # Vamos a hacer un stratified k-fold cross validation con 5 folds
 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-importances = [] # Lista para guardar las importancias de las variables de cada fold
+importances = {} # Diccionario para guardar las importancias de cada fold
 scores = {'AMEX': [], 'Accuracy': [], 'Recall': [], 'Precision': [], 'F1': []} # Diccionario para guardar los scores de cada fold
 split = skf.split(X, y)
 
@@ -187,10 +191,10 @@ for fold, (train_index, valid_index) in enumerate(split):
                             early_stopping_rounds=50, verbose_eval=50) # feval ver custom metric https://www.kaggle.com/code/jiweiliu/rapids-cudf-feature-engineering-xgb
     
     # Guardamos el modelo
-    fe.save_model_fe('XGBoost', xgb_model, fold, current_time) # Crea una carpeta para cada minuto, cambiar para que lo guarde todo en la misma
+    experiment_dir = fe.save_model_fe('XGBoost', xgb_model, fold, current_time) # Crea una carpeta para cada minuto, cambiar para que lo guarde todo en la misma
 
     # Feature importance para el fold actual
-    importances.append(xgb_model.get_score(importance_type='weight')) # ‘weight’ - the number of times a feature is used to split the data across all trees.
+    importances[fold] = xgb_model.get_score(importance_type='weight') # ‘weight’ - the number of times a feature is used to split the data across all trees.
 
     # Predecimos sobre el conjunto de validación
     y_pred = xgb_model.predict(dvalid)
@@ -255,33 +259,33 @@ print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scor
 # sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
 
 
-# In[13]: Feature importance I
+# In[13]: Feature importance I: Plot
 
-# Plot top 50 features using plotly express
-import plotly.express as px
-fig = px.bar(pd.DataFrame(importances).T.sort_values(by=0, ascending=False), orientation='h')
-fig.show()
-# In[14]: Feature importance II
-
-# Plot feature importance using matplotlib adjusting the graph size to show 150 features
-plt.figure(figsize=(20, 30))
-xgb.plot_importance(xgb_model, ax=plt.gca(), max_num_features=150, height=0.8)
+# Compute the average importance of each feature across all folds and plot top 150 using matplotlib
+importances_df = pd.DataFrame(importances).T
+mean_importances = importances_df.mean(axis=0).sort_values(ascending=False)
+plt.figure(figsize=(10, 30))
+sns.barplot(x=mean_importances.values[:150], y=mean_importances.index[:150])
+plt.title('Feature Importances over {} folds'.format(len(importances)))
 plt.show()
+
+
+# In[14]: Feature importance II: Zero importance features and save to excel
+
+# Check variables that have mean importance of 0 across all folds. As XGBoost don't save features with 0 importance,
+# We need to check which features from the total features list are not in the mean_importances list
+zero_importance_features = [feature for feature in features if feature not in mean_importances.index]
+print('There are {} features with 0 importance'.format(len(zero_importance_features)))
+
+# Save features and importance in a excel file with a column for the features and another for the importance
+importance_df = pd.DataFrame(importances).T.sort_values(by=0, ascending=False)
+importance_df.to_excel(f'{experiment_dir}/feature_importance.xlsx', index=True)
 
 
 # In[15]: Feature importance III
 
-# Check variables that have 0 importance
-zero_importance = [k for k,v in xgb_model.get_score(importance_type='weight').items() if v == 0]
-print('Number of variables with 0 importance:', len(zero_importance))
-print('Variables with 0 importance:', zero_importance)
 
-# Save features and importance in a excel file with a column for the features and another for the importance
-importance_df = pd.DataFrame(importances).T.sort_values(by=0, ascending=False)
-importance_df.to_excel('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/feature_importance.xlsx', index=True)
-
-
-# In[16]: Test predictions (pruebas)
+# In[16]: Test predictions (pruebas) --> Agregar modelos para hacer el ensemble y evitar overfitting
 
 # Load fold 0 model (best model) C:\Users\Jose\Documents\UNIVERSIDAD\TFG\MATEMATICAS\PYTHON\MODELOS\XGBoost_20230517_175554
 xgb_model = xgb.Booster()
