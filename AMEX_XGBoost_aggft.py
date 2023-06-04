@@ -213,46 +213,41 @@ def xgb_model_func(X_input, y_input, folds, FEAT_IMPORTANCE: bool):
 
         # Calculamos el permutation feature importance
         if FEAT_IMPORTANCE:
+            print('-'*50)
             print('Calculando permutation feature importance...')
 
-            # Creamos un diccionario para guardar los scores
+            # Creamos un diccionario para guardar los valores de la métrica
             perm_scores = {}
 
-            # Creamos un bucle para calcular el score de cada variable
-            for feature_k in tqdm(range(len(X_valid.columns))):
-
-                    # Guardamos la variable original
-                    temp = X_valid.iloc[:,feature_k].copy()
-        
-                    # Permutamos la variable
-                    X_valid.iloc[:,feature_k] = np.random.permutation(X_valid.iloc[:,feature_k])
-
-                    # Recreamos el dataset de validación
-                    dvalid = xgb.DMatrix(X_valid, label=y_valid, nthread=-1, enable_categorical=True)
-        
-                    # Predecimos sobre el nuevo conjunto de validación
-                    y_pred = xgb_model.predict(dvalid)
-        
-                    # Calculamos el score con la métrica customizada
-                    perm_scores[X_valid.columns[feature_k]] = amex_metric_mod(y_valid.values, y_pred)
-        
-                    # Restauramos la variable original
-                    X_valid.iloc[:,feature_k] = temp
+            # Creamos un bucle para calcular el valor de la métrica tras predecir habiendo permutado cada variable
+            for col in tqdm(X_valid.columns):
+                print(f'Calculando permutation feature importance para la variable {col}')
+                # Guardamos la variable original
+                temp = X_valid.loc[:, col].copy()
+                # Permutamos la columna actual
+                X_valid.loc[:, col] = np.random.permutation(X_valid[col])
+                # Validamos el modelo con la columna permutada
+                dvalid = xgb.DMatrix(X_valid, label=y_valid)
+                # Predecimos sobre el conjunto de validación
+                y_pred = xgb_model.predict(dvalid)
+                # Calculamos el score para el fold actual con la métrica customizada
+                perm_scores[col] = amex_metric_mod(y_valid.values, y_pred)
+                # Restauramos la columna original
+                X_valid.loc[:, col] = temp
 
             # Creamos un dataframe con los scores
-            perm_scores_df = pd.DataFrame.from_dict(perm_scores, orient='index', columns=['metric'])
-
-            # Calculamos la diferencia entre el score base y el score de cada variable
-            perm_scores_df['score_diff'] = AMEX_score - perm_scores_df['metric']
-            print('Diferencia entre el score base y el score de cada variable calculada')
-
-            # Guardamos los scores en un excel
+            perm_scores_df = pd.DataFrame.from_dict(perm_scores, orient='index').reset_index()
+            # Calculamos la diferencia entre el score original y el score permutado
+            perm_scores_df['score_diff'] = perm_scores_df[0] - AMEX_score
+            # Ordenamos los scores por la diferencia
+            perm_scores_df = perm_scores_df.sort_values('score_diff', ascending=False).reset_index(drop=True)
+            # Guardamos el dataframe en un excel
             perm_scores_df.to_excel(f'C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_{current_time}/permutation_feature_importance_{fold}.xlsx', index=True)
 
-            # Hacemos un plot con los scores ordenados (top 100)
+            # Plot Permutation Feature Importance: Top 100
             plt.figure(figsize=(10, 30))
-            sns.barplot(x=perm_scores_df['score_diff'].sort_values(ascending=False).values[:100], y=perm_scores_df['score_diff'].sort_values(ascending=False).index[:100])
-            plt.title('Permutation Feature Importance over {} folds (top 100)'.format(len(importances)))
+            sns.barplot(x='score_diff', y='index', data=perm_scores_df[:100])
+            plt.title('XGB Permutation Feature Importance: Top 100')
             plt.savefig(f'C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_{current_time}/permutation_feature_importance_{fold}.png')
             plt.show()
 
