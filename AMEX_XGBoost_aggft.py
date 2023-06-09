@@ -38,7 +38,7 @@ oh = True
 
 train_labels, train, test = fe.load_datasets(oh)
 
-# In[3]: Variables categóricas
+# In[3]: Tipos de variables
 
 # cat_features = ['B_30', 'B_38', 'D_63', 'D_64', 'D_66', 'D_68', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126']
 
@@ -128,6 +128,19 @@ gc.collect()
 # Primero añadimos la variable target a train_df_oh
 train_df_oh_raw = train_df_oh.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
 
+# Función para seleccionar variables tras PIMP
+def select_model_features(df, threshold):
+    if threshold is None:
+        return df
+    else:
+        # List of excluded features
+        excluded_features = fe.pimp_feature_selection(threshold, model='xgb')
+        # Dataframe with selected features
+        df_selected = df.drop(columns=excluded_features)
+        return df_selected
+
+train_df_oh_raw = select_model_features(train_df_oh_raw, 0)
+
 # # # Transform train_df_oh_raw inf values to zero
 # train_df_oh_raw = train_df_oh_raw.replace([np.inf, -np.inf], 0)
 
@@ -212,7 +225,7 @@ def xgb_model_func(X_input, y_input, folds, FEAT_IMPORTANCE: bool):
         scores['AMEX'].append(AMEX_score)
 
         # Calculamos el permutation feature importance
-        if FEAT_IMPORTANCE:
+        if FEAT_IMPORTANCE is True:
             print('-'*50)
             print('Calculando permutation feature importance...')
 
@@ -259,7 +272,7 @@ def xgb_model_func(X_input, y_input, folds, FEAT_IMPORTANCE: bool):
     print('-'*50)
     print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scores['AMEX']))
 
-xgb_model_func(X, y, 5, True)
+xgb_model_func(X, y, 5, False)
 
 
 # # In[10]: Save model
