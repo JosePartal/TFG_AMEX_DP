@@ -419,7 +419,7 @@ def pimp_feature_selection(threshold: float, model: str): # model = 'lgbm' or 'x
     #     pimp = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/LightGBM_20230531_190457/PIMP/FEAT_AVG_IMP.csv')
 
     # Create a list with the features with a PIMP value greater than the threshold
-    excluded_features = pimp[pimp['AVERAGE'] > threshold]['FEATURE'].to_list()
+    excluded_features = pimp[pimp['AVERAGE'] >= threshold]['FEATURE'].to_list()
 
     return excluded_features
 
