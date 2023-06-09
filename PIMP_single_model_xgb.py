@@ -228,12 +228,14 @@ def load_split(fold):
     y_valid = y_valid.iloc[:,0]
     return X_valid, y_valid #, X_train, y_train
 
-X_valid, y_valid = load_split(2)
+X_valid, y_valid = load_split(5)
 
 # In[11]: Calculamos el permutation feature importance
 
 # Creamos una función para calcular el permutation feature importance de cada fold
 def pimp_func(fold, X_valid, y_valid, current_time = '20230531_190457'):
+    # Diccionario para guardar los scores de cada fold
+    scores = {'AMEX': []} 
 
     # Primero calculamos dvalid
     dvalid = xgb.DMatrix(X_valid, label=y_valid, feature_names=X_valid.columns, nthread=-1, enable_categorical=True)
@@ -293,6 +295,6 @@ def pimp_func(fold, X_valid, y_valid, current_time = '20230531_190457'):
     del dvalid, xgb_model, y_pred, AMEX_score, perm_scores, perm_scores_df
     gc.collect()
 
-pimp_func(1, X_valid, y_valid)
+pimp_func(4, X_valid, y_valid)
 
-# %%
+
