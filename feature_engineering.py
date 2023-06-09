@@ -407,6 +407,23 @@ def load_datasets(oh:bool):
     return train_labels, train, test
 
 
+# In[13]: Utility functions IV: PIMP Feature Selection
+
+# Function that reads the average Permutation Feature Importance and returns a list with the features given a threshold
+
+def pimp_feature_selection(threshold: float, model: str): # model = 'lgbm' or 'xgb'
+    # Read the average Permutation Feature Importance file
+    if model == 'xgb':
+        pimp = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_20230531_190457/PIMP/FEAT_AVG_IMP.csv')
+    # elif model == 'lgbm':
+    #     pimp = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/LightGBM_20230531_190457/PIMP/FEAT_AVG_IMP.csv')
+
+    # Create a list with the features with a PIMP value greater than the threshold
+    features = pimp[pimp['AVERAGE'] > threshold]['FEATURE'].to_list()
+
+    return features
+
+
 # %%
 # In[6]: data
 # train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/train.parquet')
