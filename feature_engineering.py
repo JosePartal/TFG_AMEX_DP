@@ -410,7 +410,6 @@ def load_datasets(oh:bool):
 # In[13]: Utility functions IV: PIMP Feature Selection
 
 # Function that reads the average Permutation Feature Importance and returns a list with the features given a threshold
-
 def pimp_feature_selection(threshold: float, model: str): # model = 'lgbm' or 'xgb'
     # Read the average Permutation Feature Importance file
     if model == 'xgb':
@@ -423,6 +422,16 @@ def pimp_feature_selection(threshold: float, model: str): # model = 'lgbm' or 'x
 
     return excluded_features
 
+# Función para seleccionar variables tras PIMP
+def select_model_features(df, threshold, model): # model = 'lgbm' or 'xgb'
+    if threshold is None:
+        return df
+    else:
+        # List of excluded features
+        excluded_features = fe.pimp_feature_selection(threshold, model)
+        # Dataframe with selected features
+        df_selected = df.drop(columns=excluded_features)
+        return df_selected
 
 # %%
 # In[6]: data
