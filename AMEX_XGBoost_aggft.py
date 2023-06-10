@@ -371,15 +371,16 @@ importances_df, zero_importance_features = fi_func(importances, current_time, X_
 # In[16]: Test predictions (pruebas) --> Agregar modelos para hacer el ensemble y evitar overfitting
 
 # Función para recorrer los distintos modelos y hacer predicciones sobre test
-def test_predictions(model_name, threshold, load_test: bool, nfolds=5):
+def test_predictions(model_name, threshold, test_df, nfolds=5):
     # Cargamos datos de test si no están cargados
-    if load_test is True:
-        test = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/DATASETS/combined_dataset/test_df_oh.parquet')
+    if test_df is None:
+        test_df = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/DATASETS/combined_dataset/test_df_oh.parquet')
         print('Test data loaded')
 
     # Seleccionamos las variables del modelo
     if threshold is not None:
-        test = fe.select_model_features(test, threshold, 'xgb')
+        test_df = fe.select_model_features(test_df, threshold, 'xgb')
+        print(f'Test data features selected based on PIMP. Test data shape is now: {test_df.shape}')
 
     # Iteramos sobre cada fold para calucular las predicciones de cada modelo
     for fold in range(nfolds):
@@ -387,16 +388,19 @@ def test_predictions(model_name, threshold, load_test: bool, nfolds=5):
         xgb_model.load_model(f'C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_{model_name}/XGBoost_model_{fold}.json')
         print(f'Model for fold {fold} loaded')
         # Predecimos sobre test
-        X_test = test.drop(columns=['customer_ID'])
+        X_test = test_df.drop(columns=['customer_ID'])
         dtest = xgb.DMatrix(X_test, feature_names=X_test.columns, nthread=-1, enable_categorical=True)
         y_pred_test = xgb_model.predict(dtest)
         print(f'Prediction for fold {fold} done')
         # Creamos un dataframe con las predicciones
-        submission = pd.DataFrame({'customer_ID': test['customer_ID'], 'prediction': y_pred_test})
+        submission = pd.DataFrame({'customer_ID': test_df['customer_ID'], 'prediction': y_pred_test})
         # Guardamos el dataframe en un csv
-        submission.to_csv(f'C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_{model_name}/submission_{fold}.csv', index=False)
+        submission.to_csv(f'C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_{model_name}/submission_{model_name}_{fold}.csv', index=False)
         print(f'Submission for fold {fold} done')
+        # Liberamos memoria
+        del xgb_model, X_test, dtest, y_pred_test, submission
+        gc.collect()
 
-test_predictions('20230531_190457', 0, False)
-
+# test_predictions('20230531_190457', None, None)
+test_predictions('20230610_004736', 0, None)
 # %%
