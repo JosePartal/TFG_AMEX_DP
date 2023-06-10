@@ -428,7 +428,7 @@ def select_model_features(df, threshold, model): # model = 'lgbm' or 'xgb'
         return df
     else:
         # List of excluded features
-        excluded_features = fe.pimp_feature_selection(threshold, model)
+        excluded_features = pimp_feature_selection(threshold, model)
         # Dataframe with selected features
         df_selected = df.drop(columns=excluded_features)
         return df_selected
