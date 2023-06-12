@@ -3,6 +3,8 @@
 # In[1]: Librerías
 
 # Data manipulation
+# downgrade pandas to version 1.3.5
+# pip install pandas==1.3.5
 import pandas as pd 
 import numpy as np
 import gc
@@ -21,12 +23,29 @@ from sklearn.linear_model import LogisticRegression
 # Feature engineering functions
 import feature_engineering as fe
 
-# Import optibinning
+# Binning and WOE libraries
 import optbinning
+import monotonic_binning
+from monotonic_binning import monotonic_woe_binning as mwb
+import xverse
+from xverse.transformer import MonotonicBinning
+from xverse.transformer import WOE
+
+# Progress bar
+from tqdm import tqdm
+
+# Error management
+import traceback
 
 # In[2]: Lectura de datos
 
 train_labels, train, test = fe.load_datasets(oh=False)
+
+# If oh=False
+train = train.replace([np.inf, -np.inf], 0)
+
+# Fill train NaN with np.nan
+train = train.fillna(np.nan)
 
 
 # In[3]: Variables categóricas
@@ -81,66 +100,156 @@ def amex_metric(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
 
     return 0.5 * (g + d)
 
+def amex_metric_np(preds: np.ndarray, target: np.ndarray) -> float:
+    indices = np.argsort(preds)[::-1]
+    preds, target = preds[indices], target[indices]
+
+    weight = 20.0 - target * 19.0
+    cum_norm_weight = (weight / weight.sum()).cumsum()
+    four_pct_mask = cum_norm_weight <= 0.04
+    d = np.sum(target[four_pct_mask]) / np.sum(target)
+
+    weighted_target = target * weight
+    lorentz = (weighted_target / weighted_target.sum()).cumsum()
+    gini = ((lorentz - cum_norm_weight) * weight).sum()
+
+    n_pos = np.sum(target)
+    n_neg = target.shape[0] - n_pos
+    gini_max = 10 * n_neg * (n_pos + 20 * n_neg - 19) / (n_pos + 20 * n_neg)
+
+    g = gini / gini_max
+    return 0.5 * (g + d)
+
 
 # In[5]: Merge de train y train_labels
 
 train_df = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
-del train, train_labels
-
-# In[6]: Cálculo del WOE
-
-# Función para calcular el WOE de una variable categórica
-def woe_cat(df, cat_var, target):
-    '''
-    Calcula el WOE de una variable categórica
-    '''
-    # Tabla de frecuencias
-    freq_table = pd.crosstab(df[cat_var], df[target], margins=True)
-    freq_table = freq_table.reset_index()
-    freq_table = freq_table.rename(columns={0: 'non_default', 1: 'default'})
-    freq_table['total'] = freq_table['non_default'] + freq_table['default']
-    freq_table['non_default_pct'] = freq_table['non_default'] / freq_table['total']
-    freq_table['default_pct'] = freq_table['default'] / freq_table['total']
-    freq_table['woe'] = np.log(freq_table['non_default_pct'] / freq_table['default_pct'])
-    freq_table['iv'] = (freq_table['non_default_pct'] - freq_table['default_pct']) * freq_table['woe']
-    freq_table['iv'] = freq_table['iv'].sum()
-    freq_table['variable'] = cat_var
-    freq_table = freq_table[['variable', cat_var, 'non_default', 'default', 'total', 'non_default_pct', 'default_pct', 'woe', 'iv']]
-    return freq_table
-
-# Función para calcular el WOE de una variable numérica
-def woe_num(df, num_var, target):
-    '''
-    Calcula el WOE de una variable numérica
-    '''
-    # Tabla de frecuencias
-    freq_table = pd.crosstab(df[num_var], df[target], margins=True)
-    freq_table = freq_table.reset_index()
-    freq_table = freq_table.rename(columns={0: 'non_default', 1: 'default'})
-    freq_table['total'] = freq_table['non_default'] + freq_table['default']
-    freq_table['non_default_pct'] = freq_table['non_default'] / freq_table['total']
-    freq_table['default_pct'] = freq_table['default'] / freq_table['total']
-    freq_table['woe'] = np.log(freq_table['non_default_pct'] / freq_table['default_pct'])
-    freq_table['iv'] = (freq_table['non_default_pct'] - freq_table['default_pct']) * freq_table['woe']
-    freq_table['iv'] = freq_table['iv'].sum()
-    freq_table['variable'] = num_var
-    freq_table = freq_table[['variable', num_var, 'non_default', 'default', 'total', 'non_default_pct', 'default_pct', 'woe', 'iv']]
-    return freq_table
+del train, train_labels, test
 
 
-# In[7]: Cálculo del WOE de las variables
+# # Convertir las variables float32 a float64 para que funcione el binning
 
-# Cálculo del WOE de las variables categóricas
-woe_cat_df = pd.DataFrame()
-for cat_var in cat_features:
-    woe_cat_df = woe_cat_df.append(woe_cat(train_df, cat_var, 'target'))
-
-# Cálculo del WOE de las variables numéricas
-woe_num_df = pd.DataFrame()
-for num_var in num_features:
-    woe_num_df = woe_num_df.append(woe_num(train_df, num_var, 'target'))
+# for col in train_df.columns:
+#     if train_df[col].dtype == 'float32':
+#         train_df[col] = train_df[col].astype('float64')
 
 
+# In[7]: Regresión logística usando variables Weight of Evidence (WOE)
+
+# Vamos a hacer el binning y calcular las variables WOE usando la librería xverse
+
+# In[8]: Binning
+
+# # Creamos el objeto para el binning
+# binning_fit = MonotonicBinning()
+
+# # Entrenamos el objeto con los datos de entrenamientoç
+# binning_fit.fit(train_df[features], train_df['target'])
+
+# # Hacemos el binning de los datos de entrenamiento
+# train_df_binned = binning_fit.transform(train_df[features])
+# train_df_binned.head()
+
+# # In[9]: WOE
+
+# # Creamos el objeto para el WOE
+# woe_fit = WOE()
+
+# # Entrenamos el objeto con los datos de entrenamiento
+# woe_fit.fit(train_df_binned, train_df['target'])
+
+# # Hacemos el WOE de los datos de entrenamiento
+# train_df_woe = woe_fit.transform(train_df_binned)
+# train_df_woe.head()
+
+# #downgrade pandas to version 1.3.5
+# #pip install pandas==1.3.5
+
+
+
+# In[10]: Binning
+
+# Vamos a usar la librería optbinning para hacer el binning y el WOE
+# Vamos a usar la función BinningProcess
+
+# Creamos el objeto para el binning con special_codes identificando los NaN (special_codes must be a dit, list or numpy.ndarray)
+binning_fit = optbinning.BinningProcess(variable_names=features,  categorical_variables= cat_features, special_codes=[np.nan], n_jobs=-1)
+
+# Entrenamos el objeto con los datos de entrenamiento
+binning_fit.fit(train_df[features], train_df['target'].to_numpy(), check_input=True)
+
+# Hacemos el binning de los datos de entrenamiento
+train_df_binned = binning_fit.transform(train_df[features])
+train_df_binned.head()
+
+# In[11]: Regresión logística usando variables Weight of Evidence (WOE)
+
+# Calcular las variables WOE
+# woe_values = binning_fit.transform(train_df[features], metric="woe")
+
+# Event rate
+# event_rate = binning_fit.transform(train_df[features], metric="event_rate")
+
+# # Transformamos los índices
+# transform_indices = binning_fit.transform(train_df[features], metric="indices")
+
+# # Transformamos los bins
+# transform_bins = binning_fit.transform(train_df[features], metric="bins")
+
+
+# In[12]: WOE
+
+# La tabla tran_df_binned contiene los valores WoE para cada bin de cada variable. 
+# Vamos a renombrar las variables añadiendo "_woe" al final para diferenciarlas de las variables originales
+
+# Renombramos las variables
+train_df_binned.columns = [col + '_woe' for col in train_df_binned.columns]
+
+# Añadimos la variable target
+train_df_binned['target'] = train_df['target']
+
+
+# In[13]: Regresión logística usando variables Weight of Evidence (WOE) --> HACER STEPWISE
+
+"""Vamos a hacer la regresión logística usando las variables WOE.""" 
+
+# En primer lugar, definimos X e y
+X = train_df_binned.drop('target', axis=1)
+y = train_df_binned['target']
+
+# Separamos los datos en entrenamiento y validación
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Definimos el modelo
+model = LogisticRegression(random_state=42, max_iter=1000)
+
+# Entrenamos el modelo
+model.fit(X_train, y_train)
+
+# Predecimos los datos de validación
+y_pred = model.predict_proba(X_val)[:, 1]
+
+# pred_train = 1/(1+np.exp(-model.predict(X_train)))
+# pred_train_df = pd.DataFrame(pred_train, columns=['prediction'])
+
+# y_val_df = pd.DataFrame(y_val, columns=['target'])
+
+# Calculamos la métrica
+metric = amex_metric_np(y_pred, y_val.to_numpy())
+
+print(f'AMEX metric: {metric}')
+
+
+# In[14]: Regresión logística usando variables Weight of Evidence (WOE) II
+
+# Vamos a ver el resultado de la regresión logística, comprobando los coeficientes de cada variable
+
+# Creamos un dataframe con los coeficientes
+# coef_df = pd.DataFrame({'feature': X_train.columns, 'coef': model.coef_[0]})
+# coef_df
+
+
+# In[15]: Regresión logística usando variables Weight of Evidence (WOE) III: Test predictions
 
 
 # %%
