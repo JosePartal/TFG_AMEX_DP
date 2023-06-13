@@ -303,14 +303,14 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
         y_train, y_val = y_input.iloc[train_index], y_input.iloc[valid_index]
 
         if hyperopt is True:
-
+            print(f'Optimización de hiperparámetros para el fold {fold+1}')
             # Optimización de hiperparámetros con optuna: C
             def objective(trial):
                 # Definimos los hiperparámetros
                 C = trial.suggest_loguniform('C', 1e-10, 1e10)
 
                 # Definimos el modelo
-                model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, intercept = intercept, 
+                model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, fit_intercept= intercept, 
                                         C=C, solver='lbfgs', n_jobs=-1)
 
                 # Entrenamos el modelo
@@ -332,15 +332,17 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
             best_params = study.best_params
 
             # Definimos el modelo
-            log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, intercept = intercept,
+            log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, fit_intercept = intercept,
                                         C=best_params['C'], solver='lbfgs', n_jobs=-1)
             
         else:
             # Definimos el modelo
-            log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, intercept = intercept, 
+            print('No se ha realizado la optimización de hiperparámetros')
+            log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, fit_intercept = intercept, 
                                            solver='lbfgs', n_jobs=-1)
-        
+
         # Entrenamos el modelo
+        print('Entrenamiento del modelo')
         log_model.fit(X_train, y_train)
 
         # Predecimos los datos de validación
