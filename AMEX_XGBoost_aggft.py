@@ -173,7 +173,7 @@ def xgb_model_func(X_input, y_input, folds, FEAT_IMPORTANCE: bool):
 
     # Vamos a hacer un stratified k-fold cross validation con 5 folds
     skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
-    split = skf.split(X_input, y)
+    split = skf.split(X_input, y_input)
 
     # Creamos el bucle para hacer el cross validation
     for fold, (train_index, valid_index) in enumerate(split):
