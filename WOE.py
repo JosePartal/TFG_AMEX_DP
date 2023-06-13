@@ -3,8 +3,6 @@
 # In[1]: Librerías
 
 # Data manipulation
-# downgrade pandas to version 1.3.5
-# pip install pandas==1.3.5
 import pandas as pd 
 import numpy as np
 import gc
@@ -19,33 +17,30 @@ import time
 from sklearn.model_selection import StratifiedKFold 
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+import optuna
 
 # Feature engineering functions
 import feature_engineering as fe
 
-# Binning and WOE libraries
+# Binning and WOE
 import optbinning
-import monotonic_binning
-from monotonic_binning import monotonic_woe_binning as mwb
-import xverse
-from xverse.transformer import MonotonicBinning
-from xverse.transformer import WOE
 
 # Progress bar
 from tqdm import tqdm
 
-# Error management
-import traceback
 
 # In[2]: Lectura de datos
+oh=False
 
-train_labels, train, test = fe.load_datasets(oh=False)
+train_labels, train, test = fe.load_datasets(oh)
 
-# If oh=False
-train = train.replace([np.inf, -np.inf], 0)
+# if oh is False:
+#     train = train.replace([np.inf, -np.inf], 0)
+#     test = test.replace([np.inf, -np.inf], 0)
 
-# Fill train NaN with np.nan
-train = train.fillna(np.nan)
+# # Fill train NaN with np.nan
+# train = train.fillna(np.nan)
+# test = test.fillna(np.nan)
 
 
 # In[3]: Variables categóricas
@@ -69,37 +64,38 @@ features.remove('customer_ID')
 
 # In[4]: Métrica
 
-def amex_metric(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
+# def amex_metric(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
 
-    def top_four_percent_captured(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
-        df = (pd.concat([y_true, y_pred], axis='columns')
-              .sort_values('prediction', ascending=False))
-        df['weight'] = df['target'].apply(lambda x: 20 if x==0 else 1)
-        four_pct_cutoff = int(0.04 * df['weight'].sum())
-        df['weight_cumsum'] = df['weight'].cumsum()
-        df_cutoff = df.loc[df['weight_cumsum'] <= four_pct_cutoff]
-        return (df_cutoff['target'] == 1).sum() / (df['target'] == 1).sum()
+#     def top_four_percent_captured(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
+#         df = (pd.concat([y_true, y_pred], axis='columns')
+#               .sort_values('prediction', ascending=False))
+#         df['weight'] = df['target'].apply(lambda x: 20 if x==0 else 1)
+#         four_pct_cutoff = int(0.04 * df['weight'].sum())
+#         df['weight_cumsum'] = df['weight'].cumsum()
+#         df_cutoff = df.loc[df['weight_cumsum'] <= four_pct_cutoff]
+#         return (df_cutoff['target'] == 1).sum() / (df['target'] == 1).sum()
         
-    def weighted_gini(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
-        df = (pd.concat([y_true, y_pred], axis='columns')
-              .sort_values('prediction', ascending=False))
-        df['weight'] = df['target'].apply(lambda x: 20 if x==0 else 1)
-        df['random'] = (df['weight'] / df['weight'].sum()).cumsum()
-        total_pos = (df['target'] * df['weight']).sum()
-        df['cum_pos_found'] = (df['target'] * df['weight']).cumsum()
-        df['lorentz'] = df['cum_pos_found'] / total_pos
-        df['gini'] = (df['lorentz'] - df['random']) * df['weight']
-        return df['gini'].sum()
+#     def weighted_gini(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
+#         df = (pd.concat([y_true, y_pred], axis='columns')
+#               .sort_values('prediction', ascending=False))
+#         df['weight'] = df['target'].apply(lambda x: 20 if x==0 else 1)
+#         df['random'] = (df['weight'] / df['weight'].sum()).cumsum()
+#         total_pos = (df['target'] * df['weight']).sum()
+#         df['cum_pos_found'] = (df['target'] * df['weight']).cumsum()
+#         df['lorentz'] = df['cum_pos_found'] / total_pos
+#         df['gini'] = (df['lorentz'] - df['random']) * df['weight']
+#         return df['gini'].sum()
 
-    def normalized_weighted_gini(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
-        y_true_pred = y_true.rename(columns={'target': 'prediction'})
-        return weighted_gini(y_true, y_pred) / weighted_gini(y_true, y_true_pred)
+#     def normalized_weighted_gini(y_true: pd.DataFrame, y_pred: pd.DataFrame) -> float:
+#         y_true_pred = y_true.rename(columns={'target': 'prediction'})
+#         return weighted_gini(y_true, y_pred) / weighted_gini(y_true, y_true_pred)
 
-    g = normalized_weighted_gini(y_true, y_pred)
-    d = top_four_percent_captured(y_true, y_pred)
+#     g = normalized_weighted_gini(y_true, y_pred)
+#     d = top_four_percent_captured(y_true, y_pred)
 
-    return 0.5 * (g + d)
+#     return 0.5 * (g + d)
 
+# https://www.kaggle.com/code/rohanrao/amex-competition-metric-implementations
 def amex_metric_np(preds: np.ndarray, target: np.ndarray) -> float:
     indices = np.argsort(preds)[::-1]
     preds, target = preds[indices], target[indices]
@@ -127,64 +123,74 @@ train_df = train.merge(train_labels, left_on='customer_ID', right_on='customer_I
 del train, train_labels, test
 
 
-# # Convertir las variables float32 a float64 para que funcione el binning
+# In[6]: Binning y WOE
 
-# for col in train_df.columns:
-#     if train_df[col].dtype == 'float32':
-#         train_df[col] = train_df[col].astype('float64')
-
-
-# In[7]: Regresión logística usando variables Weight of Evidence (WOE)
-
-# Vamos a hacer el binning y calcular las variables WOE usando la librería xverse
-
-# In[8]: Binning
-
-# # Creamos el objeto para el binning
-# binning_fit = MonotonicBinning()
-
-# # Entrenamos el objeto con los datos de entrenamientoç
-# binning_fit.fit(train_df[features], train_df['target'])
-
-# # Hacemos el binning de los datos de entrenamiento
-# train_df_binned = binning_fit.transform(train_df[features])
-# train_df_binned.head()
-
-# # In[9]: WOE
-
-# # Creamos el objeto para el WOE
-# woe_fit = WOE()
-
-# # Entrenamos el objeto con los datos de entrenamiento
-# woe_fit.fit(train_df_binned, train_df['target'])
-
-# # Hacemos el WOE de los datos de entrenamiento
-# train_df_woe = woe_fit.transform(train_df_binned)
-# train_df_woe.head()
-
-# #downgrade pandas to version 1.3.5
-# #pip install pandas==1.3.5
-
-
-
-# In[10]: Binning
-
-# Vamos a usar la librería optbinning para hacer el binning y el WOE
-# Vamos a usar la función BinningProcess
+# Vamos a usar la librería optbinning para hacer el binning y el WOE. Usaremos la función BinningProcess
 
 # Creamos el objeto para el binning con special_codes identificando los NaN (special_codes must be a dit, list or numpy.ndarray)
-binning_fit = optbinning.BinningProcess(variable_names=features,  categorical_variables= cat_features, special_codes=[np.nan], n_jobs=-1)
+# binning_fit = optbinning.BinningProcess(variable_names=features, categorical_variables= cat_features, special_codes=[np.nan], n_jobs=-1)
 
-# Entrenamos el objeto con los datos de entrenamiento
+# # Save binning process --> ¿Debería ir después del fit?
+# binning_fit.save('binning_process.pkl')
+
+# Load binning process
+binning_fit = optbinning.BinningProcess.load('DATASETS/binning_process.pkl')
+
+# # Entrenamos el objeto con los datos de entrenamiento
 binning_fit.fit(train_df[features], train_df['target'].to_numpy(), check_input=True)
 
 # Hacemos el binning de los datos de entrenamiento
 train_df_binned = binning_fit.transform(train_df[features])
-train_df_binned.head()
 
-# In[11]: Regresión logística usando variables Weight of Evidence (WOE)
+# La tabla tran_df_binned contiene los valores WoE para cada bin de cada variable. 
+# Vamos a renombrar las variables añadiendo "_woe" al final para diferenciarlas de las variables originales
 
-# Calcular las variables WOE
+# Renombramos las variables
+train_df_binned.columns = [col + '_woe' for col in train_df_binned.columns]
+
+# Añadimos la variable target
+train_df_binned['target'] = train_df['target']
+
+print('WoE calculado')
+
+
+# In[7]: Binning y WOE II: Selección de variables basada en el IV
+
+"""Eliminamos las variables con IV < 0.02"""
+
+# Definimos el diccionario donde guardaremos los IV de cada variable
+iv_score_dict = {}
+
+# Calculamos el IV de cada variable. Tenemos que usar la función OptimalBinning para poder obtener el IV de cada variable
+for col in tqdm(features):
+    if col in cat_features:
+        optb = optbinning.OptimalBinning(dtype='categorical')
+        optb.fit(train_df[col], train_df['target'])
+    else:
+        optb = optbinning.OptimalBinning(dtype='numerical')
+        optb.fit(train_df[col], train_df['target'])
+    binning_table = optb.binning_table
+    binning_table.build()
+    iv_score_dict[col] = binning_table.iv
+
+# Convertimos el diccionario en un DataFrame y lo ordenamos de mayor a menor
+iv_score_df = pd.DataFrame.from_dict(iv_score_dict, orient='index', columns=['IV'])
+iv_score_df = iv_score_df.sort_values(by='IV', ascending=False)
+
+print('IV calculado')
+
+# Nos quedamos con las variables con IV >= 0.02
+iv_score_df = iv_score_df[iv_score_df['IV'] >= 0.02]
+
+# Lista de variables con IV >= 0.02
+selected_features = list(iv_score_df.index)
+
+# Variables con IV <= 0.02
+dropped_features = list(set(features) - set(selected_features))
+
+print('Hemos eliminado', len(dropped_features), 'variables con IV <= 0.02')
+
+# Calcular las variables WOE (default)
 # woe_values = binning_fit.transform(train_df[features], metric="woe")
 
 # Event rate
@@ -197,59 +203,211 @@ train_df_binned.head()
 # transform_bins = binning_fit.transform(train_df[features], metric="bins")
 
 
-# In[12]: WOE
+# # In[8]: PRUEBA I - Regresión logística usando variables Weight of Evidence (WOE)
 
-# La tabla tran_df_binned contiene los valores WoE para cada bin de cada variable. 
-# Vamos a renombrar las variables añadiendo "_woe" al final para diferenciarlas de las variables originales
+# """Baseline para hacer la regresión logística usando las variables WOE.""" 
 
-# Renombramos las variables
-train_df_binned.columns = [col + '_woe' for col in train_df_binned.columns]
+# # En primer lugar, definimos X e y
+# X = train_df_binned.drop('target', axis=1)
+# y = train_df_binned['target']
 
-# Añadimos la variable target
-train_df_binned['target'] = train_df['target']
+# # Separamos los datos en entrenamiento y validación
+# X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# # Definimos el modelo
+# model = LogisticRegression(random_state=42, max_iter=1000)
+
+# # Entrenamos el modelo
+# model.fit(X_train, y_train)
+
+# # Predecimos los datos de validación
+# y_pred = model.predict_proba(X_val)[:, 1]
+
+# # pred_train = 1/(1+np.exp(-model.predict(X_train)))
+# # pred_train_df = pd.DataFrame(pred_train, columns=['prediction'])
+
+# # y_val_df = pd.DataFrame(y_val, columns=['target'])
+
+# # Calculamos la métrica
+# metric = amex_metric_np(y_pred, y_val.to_numpy())
+
+# print(f'AMEX metric: {metric}')
 
 
-# In[13]: Regresión logística usando variables Weight of Evidence (WOE) --> HACER STEPWISE
+# # In[9]: PRUEBA II - Regresión logística usando variables Weight of Evidence (WOE) 
 
-"""Vamos a hacer la regresión logística usando las variables WOE.""" 
+# # Vamos a calcular la regresión logística usando las variables WoE. No emplearemos las variables con IV <= 0.02
 
-# En primer lugar, definimos X e y
-X = train_df_binned.drop('target', axis=1)
+# # En primer lugar, definimos X e y. Tenemos que añadir primero '_woe' a las variables seleccionadas
+# selected_features = [col + '_woe' for col in selected_features]
+# X = train_df_binned[selected_features]
+# y = train_df_binned['target']
+
+# # Separamos los datos en entrenamiento y validación
+# X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# # Definimos el modelo
+# model = LogisticRegression(random_state=42)
+
+# # Entrenamos el modelo
+# model.fit(X_train, y_train)
+
+# # Predecimos los datos de validación
+# y_pred = model.predict_proba(X_val)[:, 1]
+
+# # Calculamos la métrica
+# metric = amex_metric_np(y_pred, y_val.to_numpy())
+
+# print(f'AMEX metric: {metric}')
+
+
+# In[10]: Regresión logística usando variables Weight of Evidence (WOE) I: Separación de datos
+
+# Vamos a calcular la regresión logística usando las variables WoE. No emplearemos las variables con IV <= 0.02
+
+# En primer lugar, definimos X e y. Tenemos que añadir primero '_woe' a las variables seleccionadas
+selected_features = [col + '_woe' for col in selected_features]
+X = train_df_binned[selected_features]
 y = train_df_binned['target']
 
-# Separamos los datos en entrenamiento y validación
-X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Definimos el modelo
-model = LogisticRegression(random_state=42, max_iter=1000)
+# In[11]: Regresión logística usando variables Weight of Evidence (WOE) II: Cross-validation 
 
-# Entrenamos el modelo
-model.fit(X_train, y_train)
+"""Lo tengo para una regresión L2 (Ridge) ahora mismo, si quiero una L1 (Lasso) tengo que cambiar el penalty y el solver a 'saga'."""
 
-# Predecimos los datos de validación
-y_pred = model.predict_proba(X_val)[:, 1]
+# Creamos un diccionario para guardar los scores de cada fold
+scores = {'AMEX': []} 
+# Creamos un diccionario para guardar los coeficientes de cada variable para cada fold
+coefficients = {}
 
-# pred_train = 1/(1+np.exp(-model.predict(X_train)))
-# pred_train_df = pd.DataFrame(pred_train, columns=['prediction'])
+# Necesitamos el tiempo para generar la carpeta donde guardar los modelos
+current_time = time.strftime('%Y%m%d_%H%M%S')
 
-# y_val_df = pd.DataFrame(y_val, columns=['target'])
+# Definimos una función para calcular la regresión logística usando CV
+def logistic_regression_func(X_input, y_input, folds, current_time, intercept: bool, hyperopt: bool):
 
-# Calculamos la métrica
-metric = amex_metric_np(y_pred, y_val.to_numpy())
+    # Stratifed K-Fold
+    skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
+    split = skf.split(X_input, y_input)
 
-print(f'AMEX metric: {metric}')
+    # Creamos el bucle para hacer el cross validation
+    for fold, (train_index, valid_index) in enumerate(split):
+        # Mensajes informativos
+        print('-'*50)
+        print('Fold:',fold+1)
+        print( 'Train size:', len(train_index), 'Validation size:', len(valid_index))
+        print('-'*50)
+
+        # Separamos los datos en entrenamiento y validación
+        X_train, X_val = X_input.iloc[train_index], X_input.iloc[valid_index]
+        y_train, y_val = y_input.iloc[train_index], y_input.iloc[valid_index]
+
+        if hyperopt is True:
+
+            # Optimización de hiperparámetros con optuna: C
+            def objective(trial):
+                # Definimos los hiperparámetros
+                C = trial.suggest_loguniform('C', 1e-10, 1e10)
+
+                # Definimos el modelo
+                model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, intercept = intercept, 
+                                        C=C, solver='lbfgs', n_jobs=-1)
+
+                # Entrenamos el modelo
+                model.fit(X_train, y_train)
+
+                # Predecimos los datos de validación
+                y_pred = model.predict_proba(X_val)[:, 1]
+
+                # Calculamos la métrica
+                metric = amex_metric_np(y_pred, y_val.to_numpy())
+
+                return metric
+            
+            # Ejecutamos optuna
+            study = optuna.create_study(direction='maximize')
+            study.optimize(objective, n_trials=100)
+
+            # Obtenemos los mejores hiperparámetros
+            best_params = study.best_params
+
+            # Definimos el modelo
+            log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, intercept = intercept,
+                                        C=best_params['C'], solver='lbfgs', n_jobs=-1)
+            
+        else:
+            # Definimos el modelo
+            log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, intercept = intercept, 
+                                           solver='lbfgs', n_jobs=-1)
+        
+        # Entrenamos el modelo
+        log_model.fit(X_train, y_train)
+
+        # Predecimos los datos de validación
+        y_pred = log_model.predict_proba(X_val)[:, 1]
+
+        # Guardamos el modelo
+        fe.save_model_fe('LogReg', log_model, fold, current_time)
+
+        # Calculamos la métrica
+        AMEX_score = amex_metric_np(y_pred, y_val.to_numpy())
+        print(f'Métrica de Kaggle para el fold {fold}:', AMEX_score)
+        scores['AMEX'].append(AMEX_score)
+
+        # Tabla con cada variable y su coeficiente del fold actual
+        coefficients[fold] = pd.DataFrame({'feature': X_train.columns, 'coef': log_model.coef_[0]})
+
+        # Liberamos memoria
+        del X_train, X_val, y_train, y_val, log_model, y_pred
+        gc.collect()
+
+    # Mostramos los resultados
+    print('-'*50)
+    print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scores['AMEX']))
+
+logistic_regression_func(X, y, 5, current_time, intercept=True, hyperopt=False)
 
 
-# In[14]: Regresión logística usando variables Weight of Evidence (WOE) II
+# %%: Regresión logística usando variables Weight of Evidence (WOE) III: Test SAS
+# SAS_features = [
+#     'B_1_last_woe',
+#     'B_2_mean_last_6M_woe',
+#     'B_3_last_last_sub_first_woe',
+#     'B_4_last_last_sub_first_woe',
+#     'B_7_mean_last_3M_woe',
+#     'D_127_mean_woe',
+#     'D_39_last_woe',
+#     'D_41_last_last_sub_first_woe',
+#     'D_42_min_woe',
+#     'D_44_mean_last_6M_woe',
+#     'P_2_last_woe',
+#     'P_2_mean_woe',
+#     'R_1_last_woe',
+#     'R_1_mean_last_3M_woe',
+#     'R_2_last_woe',
+#     'R_3_mean_woe',
+#     'S_3_max_woe'
+# ]
 
-# Vamos a ver el resultado de la regresión logística, comprobando los coeficientes de cada variable
+# X = train_df_binned[SAS_features]
+# y = train_df_binned['target']
 
-# Creamos un dataframe con los coeficientes
+# # Separamos los datos en entrenamiento y validación
+# X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# # Definimos el modelo
+# model = LogisticRegression(random_state=42, max_iter=1000)
+
+# # Entrenamos el modelo
+# model.fit(X_train, y_train)
+
+# # Predecimos los datos de validación
+# y_pred = model.predict_proba(X_val)[:, 1]
+
+# # Calculamos la métrica
+# metric = amex_metric_np(y_pred, y_val.to_numpy())
+
+# # Tabla con cada variable y su coeficiente
 # coef_df = pd.DataFrame({'feature': X_train.columns, 'coef': model.coef_[0]})
-# coef_df
 
-
-# In[15]: Regresión logística usando variables Weight of Evidence (WOE) III: Test predictions
-
-
-# %%
+# print(f'AMEX metric: {metric}')
