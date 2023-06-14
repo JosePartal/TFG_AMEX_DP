@@ -9,6 +9,10 @@ import pandas as pd
 import numpy as np
 import gc
 
+# Visualización
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 # Time management
 import time
 
@@ -19,11 +23,6 @@ import seaborn as sns
 # Machine learning
 import lightgbm as lgb
 from sklearn.model_selection import StratifiedKFold 
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score  
-from sklearn.metrics import precision_score                         
-from sklearn.metrics import recall_score
-from sklearn.metrics import f1_score
 
 # Feature engineering functions
 import feature_engineering as fe
@@ -36,9 +35,14 @@ train_labels, train, test = fe.load_datasets(oh=True)
 
 # In[3]: Tipos de variables
 
+# cat_features = ['B_30', 'B_38', 'D_63', 'D_64', 'D_66', 'D_68', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126']
+
+# Como se han agrupado los datos, las categóricas tendrán el mismo nombre que las variables de la lista anterior que contengan seguidos de "_last" o "_first"
+# Por ejemplo, B_30_last, B_30_first, B_38_last, B_38_first, etc.
+
 # Lista de variables categóricas
-# cat_features = ['B_30_last', 'B_30_first', 'B_38_last', 'B_38_first', 'D_63_last', 'D_63_first', 'D_64_last', 'D_64_first', 'D_66_last', 'D_66_first', 'D_68_last', 
-#                 'D_68_first', 'D_114_last', 'D_114_first', 'D_116_last', 'D_116_first', 'D_117_last', 'D_117_first', 'D_120_last', 'D_120_first', 'D_126_last', 'D_126_first']
+cat_features = ['B_30_last', 'B_30_first', 'B_38_last', 'B_38_first', 'D_63_last', 'D_63_first', 'D_64_last', 'D_64_first', 'D_66_last', 'D_66_first', 'D_68_last', 
+                'D_68_first', 'D_114_last', 'D_114_first', 'D_116_last', 'D_116_first', 'D_117_last', 'D_117_first', 'D_120_last', 'D_120_first', 'D_126_last', 'D_126_first']
 
 # Lista de variables (exlucyendo 'customer_ID)
 features = list(train.columns)
@@ -105,6 +109,9 @@ def amex_metric_mod(y_true, y_pred):
 # Primero añadimos la variable target a train_df_oh
 train_df_oh = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
 
+# # Selección de variables basada en PIMP
+# train_df_oh = fe.select_model_features(train_df_oh, 0, 'lgbm')
+
 # Definimos X e y
 X = train_df_oh.drop(columns = ['target', 'customer_ID']) 
 y = train_df_oh['target']
@@ -117,28 +124,29 @@ gc.collect()
 
 # Parámetros LGBM (usando dart)
 
-LGBM_params = {
-                  'objective' : 'binary',
-                  'metric' : 'binary_logloss',
-                  'boosting': 'dart',
-                  'max_depth' : -1,
-                  'num_leaves' : 64,
-                  'learning_rate' : 0.2,
-                  'bagging_freq': 5,
-                  'bagging_fraction' : 0.75,
-                  'feature_fraction' : 0.05,
-                  'min_data_in_leaf': 256,
-                  'max_bin': 63,
-                  'min_data_in_bin': 256,
-                  # 'min_sum_heassian_in_leaf': 10,
-                  'tree_learner': 'serial',
-                  'boost_from_average': 'false',
-                  'lambda_l1' : 0.1,
-                  'lambda_l2' : 30,
-                  'num_threads': -1,
-                  'force_row_wise' : True,
-                  'verbosity' : 1,
-    }
+# LGBM_params = {
+#                   'objective' : 'binary',
+#                   'metric' : 'binary_logloss',
+#                   'boosting': 'dart',
+#                   'max_depth' : -1,
+#                   'num_leaves' : 64,
+#                   'learning_rate' : 0.3,
+#                   'bagging_freq': 5,
+#                   'bagging_fraction' : 0.75,
+#                   'feature_fraction' : 0.05,
+#                   'min_data_in_leaf': 256,
+#                   'max_bin': 63,
+#                   'min_data_in_bin': 256,
+#                   # 'min_sum_heassian_in_leaf': 10,
+#                   'tree_learner': 'voting',
+#                   'boost_from_average': 'false',
+#                   'lambda_l1' : 0.1,
+#                   'lambda_l2' : 30,
+#                   'num_threads': -1,
+#                   'force_row_wise' : True,
+#                   'verbosity' : 0,
+#                   'device' : 'gpu',
+#     }
 # # https://www.kaggle.com/code/ragnar123/amex-lgbm-dart-cv-0-7977#Training-&-Inference
 # LGBM_params2 = {
 #         'objective': 'binary',
@@ -175,6 +183,33 @@ LGBM_params = {
 #     'seed': SEED,
 # }
 
+LGBM_params = {
+    'objective': 'binary',
+    'metric': 'binary_logloss',
+    'boosting': 'dart',
+    'max_depth' : 6,
+    'num_leaves' : 64,
+    'learning_rate' : 0.3,
+    'bagging_freq': 5,
+    'bagging_fraction' : 0.75,
+    'feature_fraction' : 0.1,
+    'min_data_in_leaf': 256,
+    'max_bin': 50,
+    'min_data_in_bin': 256,
+    # 'min_sum_heassian_in_leaf': 10,
+    'tree_learner': 'voting',
+    'boost_from_average': 'false',
+    'lambda_l1' : 0.1,
+    'lambda_l2' : 30,
+    'num_threads': -1,
+    'force_row_wise' : True,
+    'verbosity' : 0,
+    'device' : 'gpu',
+    'min_gain_to_split' : 0.001,
+    'early_stopping_round' : 100,
+    }
+
+
 # In[7]: Hyperparameter tuning
 
 
@@ -185,7 +220,7 @@ skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 split = skf.split(X, y)
 
 # Diccionario para guardar los scores de cada fold
-scores = {'AMEX': [], 'Accuracy': [], 'Recall': [], 'Precision': [], 'F1': []}
+scores = {'AMEX': []}
 
 # Definimos las listas para guardar las predicciones
 y_pred_train = []
@@ -214,15 +249,13 @@ for fold, (train_index, valid_index) in enumerate(split):
     X_train, X_valid = X.iloc[train_index], X.iloc[valid_index]
     y_train, y_valid = y.iloc[train_index], y.iloc[valid_index]
 
-    # Creamos el dataset de entrenamiento incluyendo las variables categóricas
+    # Creamos el dataset de entrenamiento y validación incluyendo las variables categóricas
     lgb_train = lgb.Dataset(X_train, y_train)
-
-    # Creamos el dataset de validación incluyendo las variables categóricas
     lgb_valid = lgb.Dataset(X_valid, y_valid)
 
-    # Entrenamos el modelo
-    model_lgb = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=6000, valid_sets=[lgb_train, lgb_valid],
-                            callbacks=[lgb.log_evaluation(period=100)])
+    # Entrenamos el modelo para el fold actual
+    model_lgb = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=3000, valid_sets=[lgb_train, lgb_valid],
+                            callbacks=[lgb.log_evaluation(period=100), lgb.early_stopping(100)])
     
     # Guardamos el modelo
     models.append(model_lgb)
