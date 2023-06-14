@@ -300,16 +300,16 @@ def pimp_func(fold, X_valid, y_valid, current_time = '20230518_151655'):
     plt.show()
 
     # Liberamos memoria
-    del dvalid, lgbm_model, y_pred, AMEX_score, perm_scores, perm_scores_df
+    del lgbm_model, y_pred, AMEX_score, perm_scores, perm_scores_df
     gc.collect()
 
 # pimp_func(0, X_valid, y_valid)
 
 # In[12]: Cálculo para cada fold
 
-# Fold 1
-X_valid, y_valid = load_split(1)
-pimp_func(0, X_valid, y_valid)
+# # Fold 1
+# X_valid, y_valid = load_split(1)
+# pimp_func(0, X_valid, y_valid)
 
 # # Fold 2
 # X_valid, y_valid = load_split(2)
