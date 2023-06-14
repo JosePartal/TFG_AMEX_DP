@@ -17,14 +17,6 @@ import time
 # Machine learning
 import xgboost as xgb
 from sklearn.model_selection import StratifiedKFold 
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score  
-from sklearn.metrics import precision_score                         
-from sklearn.metrics import recall_score
-from sklearn.metrics import f1_score
-
-# Librerías árboles de decisión
-from sklearn.metrics import accuracy_score
 
 # Funciones ingeniería de variables
 import feature_engineering as fe
