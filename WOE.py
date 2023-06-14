@@ -284,7 +284,7 @@ coefficients = {}
 current_time = time.strftime('%Y%m%d_%H%M%S')
 
 # Definimos una función para calcular la regresión logística usando CV
-def logistic_regression_func(X_input, y_input, folds, current_time, intercept: bool, hyperopt: bool):
+def logistic_regression_func(X_input, y_input, folds, current_time, intercept: bool, hyperopt: bool, max_iter: int):
 
     # Stratifed K-Fold
     skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
@@ -310,7 +310,7 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
                 C = trial.suggest_loguniform('C', 1e-10, 1e10)
 
                 # Definimos el modelo
-                model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, fit_intercept= intercept, 
+                model = LogisticRegression(random_state=42, penalty='l2', max_iter=max_iter, fit_intercept= intercept, 
                                         C=C, solver='lbfgs', n_jobs=-1)
 
                 # Entrenamos el modelo
@@ -332,21 +332,23 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
             best_params = study.best_params
 
             # Definimos el modelo
-            log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, fit_intercept = intercept,
+            log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=max_iter, fit_intercept = intercept,
                                         C=best_params['C'], solver='lbfgs', n_jobs=-1)
             
         else:
             # Definimos el modelo
             print('No se ha realizado la optimización de hiperparámetros')
-            log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=1000, fit_intercept = intercept, 
+            log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=max_iter, fit_intercept = intercept, 
                                            solver='lbfgs', n_jobs=-1)
 
         # Entrenamos el modelo
         print('Entrenamiento del modelo')
         log_model.fit(X_train, y_train)
+        print('Entrenamiento finalizado')
 
         # Predecimos los datos de validación
         y_pred = log_model.predict_proba(X_val)[:, 1]
+        print('Predicción finalizada')
 
         # Guardamos el modelo
         fe.save_model_fe('LogReg', log_model, fold, current_time)
@@ -358,6 +360,7 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
 
         # Tabla con cada variable y su coeficiente del fold actual
         coefficients[fold] = pd.DataFrame({'feature': X_train.columns, 'coef': log_model.coef_[0]})
+        print('Tabla con los coeficientes de cada variable del fold creada')
 
         # Liberamos memoria
         del X_train, X_val, y_train, y_val, log_model, y_pred
@@ -367,7 +370,7 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
     print('-'*50)
     print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scores['AMEX']))
 
-logistic_regression_func(X, y, 5, current_time, intercept=True, hyperopt=False)
+logistic_regression_func(X, y, 5, current_time, intercept=True, hyperopt=False, max_iter=100)
 
 
 # %%: Regresión logística usando variables Weight of Evidence (WOE) III: Test SAS
