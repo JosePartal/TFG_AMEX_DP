@@ -251,15 +251,12 @@ def pimp_func(fold, X_valid, y_valid, current_time = '20230518_151655'):
     # Diccionario para guardar los scores de cada fold
     scores = {'AMEX': []} 
 
-    # Primero calculamos lgb_valid
-    lgb_valid = lgb.Dataset(X_valid, y_valid)
-    
     # Cargamos el modelo
     lgbm_model = lgb.Booster(model_file='MODELOS/LGBM_' + current_time + '/' + 'LGBM_model_' + str(fold) + '.json')
     print('Modelo cargado')
 
     # Predecimos sobre el conjunto de validación
-    y_pred = lgbm_model.predict(lgb_valid)
+    y_pred = lgbm_model.predict(X_valid)
 
     # Calculamos el score con la métrica modificada
     AMEX_score = amex_metric_mod(y_valid.values, y_pred) 
@@ -279,10 +276,8 @@ def pimp_func(fold, X_valid, y_valid, current_time = '20230518_151655'):
         temp = X_valid.loc[:, col].copy()
         # Permutamos la columna actual
         X_valid.loc[:, col] = np.random.permutation(X_valid[col])
-        # Validamos el modelo con la columna permutada
-        dvalid = lgb.Dataset(X_valid, label=y_valid)
         # Predecimos sobre el conjunto de validación
-        y_pred = lgbm_model.predict(dvalid)
+        y_pred = lgbm_model.predict(X_valid)
         # Calculamos el score para el fold actual con la métrica customizada
         perm_scores[col] = amex_metric_mod(y_valid.values, y_pred)
         # Restauramos la columna original
