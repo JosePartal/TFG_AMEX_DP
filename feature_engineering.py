@@ -108,12 +108,17 @@ We will create to functions for this purpose: one for categorical features and o
 
 def feat_aggregations(df, cat_features, num_features, groupby_var = 'customer_ID'):
     # Group by the specified variable and calculate the statistics
-    df_cat_agg = df.groupby(groupby_var)[cat_features].agg(['count', 'first', 'last', 'nunique'])
+    df_cat_agg = df.groupby(groupby_var)[cat_features].agg(['first', 'last', 'nunique'])
     df_num_agg = df.groupby(groupby_var)[num_features].agg(['mean', 'std', 'max', 'min', 'first', 'last', 'median'])
+    df_count_agg = df.groupby(groupby_var,sort=False)[['S_2']].agg(['count'])
 
     # Strings list for aggregated features names
     df_cat_agg.columns = ['_'.join(col) for col in df_cat_agg.columns]
     df_num_agg.columns = ['_'.join(col) for col in df_num_agg.columns]
+    df_count_agg.columns = ['_'.join(col) for col in df_count_agg.columns]
+
+    # Merge df_count_agg with df_cat_agg
+    df_cat_agg = df_cat_agg.merge(df_count_agg, how='inner', on='customer_ID')
 
     return df_cat_agg, df_num_agg
 
