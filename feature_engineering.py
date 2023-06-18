@@ -16,6 +16,9 @@ import pickle
 import time
 from tqdm import tqdm # Progress bar
 
+# Machine learning
+from sklearn.model_selection import StratifiedKFold
+
 
 # In[2]: Utility functions I: Model saving
 
@@ -399,7 +402,7 @@ def save_combined(data, dataset_name: str): # dataset_name = 'train' or 'test'
 def load_datasets(oh:bool):
     # Labels
     train_labels = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/train_labels.csv', low_memory=False)
-    if oh == False:
+    if oh is False:
         # Train
         train = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/DATASETS/combined_dataset/train_combined_dataset.parquet')
         # Test
@@ -437,6 +440,40 @@ def select_model_features(df, threshold, model): # model = 'lgbm' or 'xgb'
         # Dataframe with selected features
         df_selected = df.drop(columns=excluded_features)
         return df_selected
+
+
+# In[14]: Utility functions V: SKF split dictionary
+
+def skf_func(X_input, y_input, folds):
+
+    # Vamos a hacer un stratified k-fold cross validation con 5 folds
+    skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
+    split = skf.split(X_input, y_input)
+
+    # Creamos un diccionario para guardar las particiones
+    split_dict = {}
+
+    # Creamos el bucle para hacer el cross validation
+    for fold, (train_index, valid_index) in enumerate(split):
+
+        # Mensajes informativos
+        print('-'*50)
+        print('Fold:',fold+1)
+        print( 'Train size:', len(train_index), 'Validation size:', len(valid_index))
+        print('-'*50)
+
+        # Separamos los datos en entrenamiento y validación
+        X_train, X_valid = X_input.iloc[train_index], X_input.iloc[valid_index]
+        y_train, y_valid = y_input.iloc[train_index], y_input.iloc[valid_index]
+
+        # Guardamos las X_train, X_valid, y_train, y_valid en el diccionario
+        split_dict['X_train_fold_'+str(fold+1)] = X_train
+        split_dict['X_valid_fold_'+str(fold+1)] = X_valid
+        split_dict['y_train_fold_'+str(fold+1)] = y_train
+        split_dict['y_valid_fold_'+str(fold+1)] = y_valid
+
+    return split_dict
+
 
 # %%
 # In[6]: data
@@ -482,3 +519,6 @@ def select_model_features(df, threshold, model): # model = 'lgbm' or 'xgb'
 
 # Drop all lag variables
 # train.drop(columns = [col for col in train.columns if 'lag' in col], inplace = True)
+
+ # Drp columns with 'count' in the name
+# train.drop(columns = [col for col in train.columns if 'count' in col], inplace = True)
