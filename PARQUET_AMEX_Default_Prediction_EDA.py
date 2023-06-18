@@ -22,7 +22,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import StandardScaler
 import lightgbm as lgb
 
-
+from tqdm import tqdm
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -318,37 +318,138 @@ numerical_features = [col for col in features if col not in categorical_features
 print('There are at most 8 categories. One-hot encoder is feasible.')
 
 plt.figure(figsize=(16, 16))
-for i, f in enumerate(categorical_features):
+for i, f in tqdm(enumerate(categorical_features)):
     plt.subplot(4, 3, i+1)
-    temp = pd.DataFrame(train[f][train_raw.target == 0].value_counts(dropna=False, normalize=True).sort_index().rename('count'))
+    temp = pd.DataFrame(train_raw[f][train_raw.target == 0].value_counts(dropna=False, normalize=True).sort_index().rename('count'))
     temp.index.name = 'value'
     temp.reset_index(inplace=True)
-    plt.bar(temp.index, temp['count'], alpha=0.5, label='target=0')
-    temp = pd.DataFrame(train[f][train_raw.target == 1].value_counts(dropna=False, normalize=True).sort_index().rename('count'))
+    plt.bar(temp.index, temp['count'], alpha=0.5, label='Pagado')
+    temp = pd.DataFrame(train_raw[f][train_raw.target == 1].value_counts(dropna=False, normalize=True).sort_index().rename('count'))
     temp.index.name = 'value'
     temp.reset_index(inplace=True)
-    plt.bar(temp.index, temp['count'], alpha=0.5, label='target=1')
+    plt.bar(temp.index, temp['count'], alpha=0.5, label='Default')
     plt.xlabel(f)
-    plt.ylabel('frequency')
+    plt.ylabel('Frecuencia')
     plt.legend()
     plt.xticks(temp.index, temp.value)
-plt.suptitle('Categorical features', fontsize=20, y=0.93)
+plt.suptitle('Variables categóricas', fontsize=20, y=0.93)
 plt.show() #savefig
 del temp
 
 
 # In[15]: Exploratory data analysis (EDA) - Feature distributions (2): Spend features
 
+# Let's plot the distribution of the Spend features, making histograms and analysing the distribution
+# of the target variable of each feature
+
+# Spend features
+spend_features = [col for col in features if col.startswith('S_') and col not in categorical_features] 
+
+plt.figure(figsize=(16, 16))
+for i, f in tqdm(enumerate(spend_features)):
+    ax = plt.subplot(5, 5, i+1)
+    sns.kdeplot(train_raw[f][train_raw.target == 0], label='Pagado')
+    sns.kdeplot(train_raw[f][train_raw.target == 1], label='Default')
+    plt.xlabel(f)
+    plt.ylabel('Densidad')
+
+# Crear una leyenda única en la esquina superior izquierda
+handles, labels = ax.get_legend_handles_labels()
+plt.figlegend(handles, labels, loc='upper left', bbox_to_anchor=(0.08, 0.97), bbox_transform=plt.gcf().transFigure)
+
+plt.suptitle('Variables de gasto (S)', fontsize=20, y=0.965)
+plt.tight_layout(rect=[0, 0.03, 0.98, 0.95])
+plt.show() # savefig
+
+
+
 # In[16]: Exploratory data analysis (EDA) - Feature distributions (3): Delincuquency features
+
+# Delinquency features
+delinquency_features = [col for col in features if col.startswith('D_') and col not in categorical_features]
+
+plt.figure(figsize=(16, 54))
+for i, f in tqdm(enumerate(delinquency_features)):
+      plt.subplot(18, 5, i+1)
+      sns.kdeplot(train_raw[f][train_raw.target == 0], label='Pagado')
+      sns.kdeplot(train_raw[f][train_raw.target == 1], label='Default')
+      plt.xlabel(f)
+      plt.ylabel('Densidad')
+
+# Crear una leyenda única en la esquina superior izquierda
+handles, labels = ax.get_legend_handles_labels()
+plt.figlegend(handles, labels, loc='upper left', bbox_to_anchor=(0.08, 0.97), bbox_transform=plt.gcf().transFigure)
+
+plt.suptitle('Variables de delincuencia (D)', fontsize=20, y=0.965)
+plt.tight_layout(rect=[0, 0.03, 0.98, 0.95])
+plt.show() #savefig
+
 
 
 # In[17]: Exploratory data analysis (EDA) - Feature distributions (4): Payment features
 
+# Payment features
+payment_features = [col for col in features if col.startswith('P_') and col not in categorical_features]
+
+plt.figure(figsize=(16, 5))
+for i, f in tqdm(enumerate(payment_features)):
+      plt.subplot(1, 3, i+1)
+      sns.kdeplot(train_raw[f][train_raw.target == 0], label='Pagado')
+      sns.kdeplot(train_raw[f][train_raw.target == 1], label='Default')
+      plt.xlabel(f)
+      plt.ylabel('Densidad')
+
+# Crear una leyenda única en la esquina superior izquierda
+handles, labels = ax.get_legend_handles_labels()
+plt.figlegend(handles, labels, loc='upper left', bbox_to_anchor=(0.08, 0.97), bbox_transform=plt.gcf().transFigure)
+
+plt.suptitle('Variables de pago (P)', fontsize=20, y=0.965)
+plt.tight_layout(rect=[0, 0.03, 0.98, 0.95])
+plt.show() #savefig
+
 
 # In[18]: Exploratory data analysis (EDA) - Feature distributions (5): Balance features
 
+# Balance features
+balance_features = [col for col in features if col.startswith('B_') and col not in categorical_features]
+
+plt.figure(figsize=(16, 16))
+for i, f in tqdm(enumerate(balance_features)):
+      plt.subplot(8, 5, i+1)
+      sns.kdeplot(train_raw[f][train_raw.target == 0], label='Pagado')
+      sns.kdeplot(train_raw[f][train_raw.target == 1], label='Default')
+      plt.xlabel(f)
+      plt.ylabel('Densidad')
+
+# Crear una leyenda única en la esquina superior izquierda
+handles, labels = ax.get_legend_handles_labels()
+plt.figlegend(handles, labels, loc='upper left', bbox_to_anchor=(0.08, 0.97), bbox_transform=plt.gcf().transFigure)
+
+plt.suptitle('Variables de balance (B)', fontsize=20, y=0.965)
+plt.tight_layout(rect=[0, 0.03, 0.98, 0.95])
+plt.show() #savefig
+
 
 # In[19]: Exploratory data analysis (EDA) - Feature distributions (6): Risk features
+
+# Risk features
+risk_features = [col for col in features if col.startswith('R_') and col not in categorical_features]
+
+plt.figure(figsize=(16, 16))
+for i, f in tqdm(enumerate(risk_features)):
+      plt.subplot(6, 5, i+1)
+      sns.kdeplot(train_raw[f][train_raw.target == 0], label='Pagado')
+      sns.kdeplot(train_raw[f][train_raw.target == 1], label='Default')
+      plt.xlabel(f)
+      plt.ylabel('Densidad')
+
+# Crear una leyenda única en la esquina superior izquierda
+handles, labels = ax.get_legend_handles_labels()
+plt.figlegend(handles, labels, loc='upper left', bbox_to_anchor=(0.08, 0.97), bbox_transform=plt.gcf().transFigure)
+
+plt.suptitle('Variables de riesgo (R)', fontsize=20, y=0.965)
+plt.tight_layout(rect=[0, 0.03, 0.98, 0.95])
+plt.show() #savefig
 
 
 # In[20]: Exploratory data analysis (EDA) - Correlations (1): With target variable
