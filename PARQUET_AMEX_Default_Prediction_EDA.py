@@ -205,48 +205,46 @@ ax.set_ylim(0,1)
 plt.show()
 
 
-# In[10]: Exploratory data analysis (EDA) - Missing values
+# In[10]: Exploratory data analysis (EDA) - Missing values in train
 
 # We are going to explore the amount and percentage of missing values in each variable
 
 pd_series_null_columns = train_raw.isnull().sum().sort_values(ascending=False)
-# pd_series_null_rows = train_raw.isnull().sum(axis=1).sort_values(ascending=False)
-
-
-pd_null_columnas = pd.DataFrame(pd_series_null_columns, columns=['nulos_columnas'])     
-pd_null_columnas['porcentaje_columnas'] = pd_null_columnas['nulos_columnas']/train_raw.shape[0]
-# pd_null_filas = pd.DataFrame(pd_series_null_rows, columns=['nulos_filas'])  
-# pd_null_filas['target'] = train_raw['target'].copy()
-# pd_null_filas['porcentaje_filas']= pd_null_filas['nulos_filas']/train_raw.shape[1]
-
-#  Vector of features with null values
+pd_null_columnas = pd.DataFrame(pd_series_null_columns, columns=['nulos_columnas'])
+pd_null_columnas['porcentaje_columnas'] = pd_null_columnas['nulos_columnas'] / train_raw.shape[0]
 
 list_var_null_train = [x for x in list(pd_null_columnas.index) if pd_null_columnas.nulos_columnas[x] > 0]
 
 tmp = train_raw.isna().sum().div(len(train_raw)).mul(100).sort_values(ascending=False)
 
-print(f'There are {len(tmp[tmp > 0])} variables with missing values. \n \
-      Some of these variables have a high percentage of missing values. \n \
-      It is worth studying if this varibles also have such a high percentage of missing values \n \
-      in the test set before deciding to drop them. \n \
-      Furthermore, we can also study the structure of this missing data.')
-
-plt.style.use('Solarize_Light2')
-fig, ax = plt.subplots(2,1, figsize=(25,10))
+fig, ax = plt.subplots(2, 1, figsize=(25, 10))
 sns.barplot(x=tmp[:100].index, y=tmp[:100].values, ax=ax[0])
 sns.barplot(x=tmp[100:].index, y=tmp[100:].values, ax=ax[1])
-ax[0].set_ylabel("Percentage [%]"), ax[1].set_ylabel("Percentage [%]")
-ax[0].tick_params(axis='x', rotation=90); ax[1].tick_params(axis='x', rotation=90)
-plt.suptitle("Amount of missing data")
+ax[0].set_ylabel("Porcentaje [%]"), ax[1].set_ylabel("Porcentaje [%]")
+ax[0].set_xlabel("")  # Vaciar el texto del eje x en la primera gráfica
+ax[1].set_xlabel("Variables")
+ax[0].tick_params(axis='x', rotation=90)
+ax[1].tick_params(axis='x', rotation=90)
+plt.suptitle("Cantidad de datos faltantes")
 plt.tight_layout()
 plt.show()
+
+# # Only with missings
+# plt.figure(figsize=(15, 8))
+# sns.barplot(x=tmp[list_var_null_train].index, y=tmp[list_var_null_train].values)
+# plt.xlabel("Variables")
+# plt.ylabel("Porcentaje [%]")
+# plt.xticks(rotation=90)
+# plt.title("Variables con datos faltantes (train)")
+# plt.tight_layout()
+# plt.show()
 
 # del tmp, fig, ax, pd_series_null_columns
 
 
-# In[11]: Exploratory data analysis (EDA) - Missing values (2)
+# In[11]: Exploratory data analysis (EDA) - Missing values in test
 
-# List of variables with missing values in train dataset
+# List of variables with missing values in test dataset
 
 # Missing values in test dataset
 
