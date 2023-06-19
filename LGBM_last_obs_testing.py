@@ -141,31 +141,44 @@ y = train_df_oh_raw['target']
 
 # Parámetros LGBM (usando dart)
 
-LGBM_params = {
-                  'objective' : 'binary',
-                  'metric' : 'binary_logloss',
-                  'boosting': 'dart',
-                  'max_depth' : -1,
-                  'num_leaves' : 64,
-                  'learning_rate' : 0.3,
-                  'bagging_freq': 5,
-                  'bagging_fraction' : 0.75,
-                  'feature_fraction' : 0.05,
-                  'min_data_in_leaf': 256,
-                  'max_bin': 63,
-                  'min_data_in_bin': 256,
-                  # 'min_sum_heassian_in_leaf': 10,
-                  'tree_learner': 'voting',
-                  'boost_from_average': 'false',
-                  'lambda_l1' : 0.1,
-                  'lambda_l2' : 30,
-                  'num_threads': -1,
-                  'force_row_wise' : True,
-                  'verbosity' : 0,
-                  'device' : 'gpu',
-                  'min_gain_to_split': 0.001,
-                  'early_stopping_rounds': 100,
-    }
+# LGBM_params = {
+#                   'objective' : 'binary',
+#                   'metric' : 'binary_logloss',
+#                   'boosting': 'dart',
+#                   'max_depth' : 10,
+#                   'num_leaves' : 64,
+#                   'learning_rate' : 0.3,
+#                   'bagging_freq': 5,
+#                   'bagging_fraction' : 0.75,
+#                   'feature_fraction' : 0.05,
+#                   'min_data_in_leaf': 150,
+#                   'max_bin': 63,
+#                   'min_data_in_bin': 256,
+#                   # 'min_sum_heassian_in_leaf': 10,
+#                   'tree_learner': 'voting',
+#                   'boost_from_average': 'false',
+#                   'lambda_l1' : 0.1,
+#                   'lambda_l2' : 30,
+#                   'num_threads': -1,
+#                   'force_row_wise' : True,
+#                   'verbosity' : 0,
+#                   'device' : 'gpu',
+#                   'min_gain_to_split': 0.001,
+#                   'early_stopping_rounds': 100,
+#     }
+
+LGBM_params = {'boosting_type': 'gbdt',
+            'n_estimators': 2500,
+            'num_leaves': 50,
+            'learning_rate': 0.05,
+            'colsample_bytree': 0.7,
+            'min_data_in_leaf': 1500,
+            'max_bins': 63,
+            # 'reg_alpha': 2,
+            'objective': 'binary',
+            'metric': 'binary_logloss',
+            'force_col_wise': True,
+            'random_state': 42}
 
 
 # In[8]: LGBM con StratifiedKFold
@@ -208,7 +221,7 @@ for fold, (train_index, valid_index) in enumerate(split):
     start = time.time()
 
     # Entrenamos el modelo para el fold actual
-    model_lgb = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=3000, valid_sets=[lgb_train, lgb_valid],
+    model_lgb = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=2500, valid_sets=[lgb_train, lgb_valid],
                             callbacks=[lgb.log_evaluation(period=100), lgb.early_stopping(100)])
     
     # Medimos el tiempo de entrenamiento para cada fold: end
@@ -230,18 +243,17 @@ for fold, (train_index, valid_index) in enumerate(split):
     print(f'Métrica de Kaggle para el fold {fold}:', AMEX_score)
     scores['AMEX'].append(AMEX_score)
 
-    # # Predicciones sobre el conjunto de test
-    # test_df_oh = test_df_oh.groupby('customer_ID').tail(1).set_index('customer_ID') # Última observación
-    # test_df_oh = test_df_oh.reset_index()
-    # X_test = test_df_oh.drop(columns=['customer_ID', 'S_2'])
-    # dtest = xgb.DMatrix(X_test, feature_names=X_test.columns, nthread=-1, enable_categorical=True)
-    # y_pred_test = xgb_model.predict(dtest)
-    # print(f'Prediction for fold {fold} done')
-    # # Creamos un dataframe con las predicciones
-    # submission = pd.DataFrame({'customer_ID': test_df_oh['customer_ID'], 'prediction': y_pred_test})
-    # # Guardamos el dataframe en un csv
-    # submission.to_csv(f'C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_{current_time}/submission_lastob_xgb_{fold}.csv', index=False)
-    # print(f'Submission for fold {fold} done')
+    # Predicciones sobre el conjunto de test
+    test_df_oh = test_df_oh.groupby('customer_ID').tail(1).set_index('customer_ID') # Última observación
+    test_df_oh = test_df_oh.reset_index()
+    X_test = test_df_oh.drop(columns=['customer_ID', 'S_2'])
+    y_pred_test = model_lgb.predict(X_test)
+    print(f'Prediction for fold {fold} done')
+    # Creamos un dataframe con las predicciones
+    submission = pd.DataFrame({'customer_ID': test_df_oh['customer_ID'], 'prediction': y_pred_test})
+    # Guardamos el dataframe en un csv
+    submission.to_csv(f'C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/LGBM_{current_time}/submission_lastob_lgbm_{fold}.csv', index=False)
+    print(f'Submission for fold {fold} done')
 
     # Liberamos memoria
     del X_train, X_valid, y_train, y_valid, lgb_train, lgb_valid
