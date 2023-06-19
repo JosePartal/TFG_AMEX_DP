@@ -34,9 +34,14 @@ def save_model_fe(algorithm: str, model, fold, current_time):
 
     print(f'Saving model in {experiment_dir}')
 
-    # Save model with save_model() function in json format in the experiment directory
-    model_path = experiment_dir / f'{algorithm}_model_{str(fold)}.json'
-    model.save_model(model_path)
+    if algorithm == 'LogReg':
+        # Save model with pickle
+        model_path = experiment_dir / f'{algorithm}_model_{str(fold)}.pkl'
+        pickle.dump(model, open(model_path, 'wb'))
+    else:    
+        # Save model with save_model() function in json format in the experiment directory
+        model_path = experiment_dir / f'{algorithm}_model_{str(fold)}.json'
+        model.save_model(model_path)
 
     print('Model saved successfully')
 
