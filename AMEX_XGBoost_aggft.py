@@ -186,10 +186,17 @@ def xgb_model_func(X_input, y_input, folds, FEAT_IMPORTANCE: bool):
         dtrain = xgb.QuantileDMatrix(X_train, label=y_train, feature_names=X_train.columns, nthread=-1, enable_categorical=True)
         dvalid = xgb.DMatrix(X_valid, label=y_valid, feature_names=X_valid.columns, nthread=-1, enable_categorical=True)
 
+        # Medimos el tiempo de entrenamiento de cada fold (start)
+        start = time.time()
+
         # Entrenamos el modelo para el fold actual
 
         xgb_model = xgb.train(xgb_parms, dtrain, num_boost_round=2500, evals=[(dtrain,'train'),(dvalid,'test')],
                                 early_stopping_rounds=50, verbose_eval=50) # feval ver custom metric https://www.kaggle.com/code/jiweiliu/rapids-cudf-feature-engineering-xgb
+        
+        # Medimos el tiempo de entrenamiento de cada fold (end)
+        end = time.time()
+        print(f'Tiempo de entrenamiento del fold {fold}:', end-start)
         
         # Guardamos el modelo
         fe.save_model_fe('XGBoost', xgb_model, fold, current_time) 

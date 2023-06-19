@@ -253,9 +253,16 @@ for fold, (train_index, valid_index) in enumerate(split):
     lgb_train = lgb.Dataset(X_train, y_train)
     lgb_valid = lgb.Dataset(X_valid, y_valid)
 
+    # Medimos el tiempo de entrenamiento de cada fold (start)
+    start = time.time()
+
     # Entrenamos el modelo para el fold actual
     model_lgb = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=3000, valid_sets=[lgb_train, lgb_valid],
                             callbacks=[lgb.log_evaluation(period=100), lgb.early_stopping(100)])
+    
+    # Medimos el tiempo de entrenamiento de cada fold (end)
+    end = time.time()
+    print('Tiempo de entrenamiento:', end - start)
     
     # Guardamos el modelo
     models.append(model_lgb)
