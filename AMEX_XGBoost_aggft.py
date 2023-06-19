@@ -120,7 +120,7 @@ gc.collect()
 # Primero añadimos la variable target a train_df_oh
 train_df_oh_raw = train_df_oh.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
 
-train_df_oh_raw = fe.select_model_features(train_df_oh_raw, 0, 'xgb')
+# train_df_oh_raw = fe.select_model_features(train_df_oh_raw, 0, 'xgb')
 
 # # # Transform train_df_oh_raw inf values to zero
 # train_df_oh_raw = train_df_oh_raw.replace([np.inf, -np.inf], 0)

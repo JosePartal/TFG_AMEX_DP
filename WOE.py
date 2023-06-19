@@ -18,6 +18,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 import optuna
+# import cuml
 
 # Feature engineering functions
 import feature_engineering as fe
@@ -30,9 +31,12 @@ from tqdm import tqdm
 
 
 # In[2]: Lectura de datos
-oh=False
+# oh=False
 
-train_labels, train, test = fe.load_datasets(oh)
+# train_labels, train, test = fe.load_datasets(oh)
+
+train_labels = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/train_labels.csv', low_memory=False)
+train = pd.read_parquet('./DATASETS/combined_dataset/train_combined_dataset.parquet')
 
 # if oh is False:
 #     train = train.replace([np.inf, -np.inf], 0)
@@ -120,7 +124,8 @@ def amex_metric_np(preds: np.ndarray, target: np.ndarray) -> float:
 # In[5]: Merge de train y train_labels
 
 train_df = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
-del train, train_labels, test
+del train, train_labels#, test
+gc.collect()
 
 
 # In[6]: Binning y WOE
@@ -128,13 +133,13 @@ del train, train_labels, test
 # Vamos a usar la librería optbinning para hacer el binning y el WOE. Usaremos la función BinningProcess
 
 # Creamos el objeto para el binning con special_codes identificando los NaN (special_codes must be a dit, list or numpy.ndarray)
-# binning_fit = optbinning.BinningProcess(variable_names=features, categorical_variables= cat_features, special_codes=[np.nan], n_jobs=-1)
+binning_fit = optbinning.BinningProcess(variable_names=features, categorical_variables= cat_features, special_codes=[np.nan], n_jobs=-1)
 
 # # Save binning process --> ¿Debería ir después del fit?
 # binning_fit.save('binning_process.pkl')
 
 # Load binning process
-binning_fit = optbinning.BinningProcess.load('DATASETS/binning_process.pkl')
+# binning_fit = optbinning.BinningProcess.load('DATASETS/binning_process.pkl')
 
 # # Entrenamos el objeto con los datos de entrenamiento
 binning_fit.fit(train_df[features], train_df['target'].to_numpy(), check_input=True)
@@ -270,6 +275,7 @@ selected_features = [col + '_woe' for col in selected_features]
 X = train_df_binned[selected_features]
 y = train_df_binned['target']
 
+del binning_fit, binning_table, optb, train_df_binned
 
 # In[11]: Regresión logística usando variables Weight of Evidence (WOE) II: Cross-validation 
 
@@ -284,8 +290,7 @@ coefficients = {}
 current_time = time.strftime('%Y%m%d_%H%M%S')
 
 # Definimos una función para calcular la regresión logística usando CV
-def logistic_regression_func(X_input, y_input, folds, current_time, intercept: bool, hyperopt: bool, max_iter: int):
-
+def logistic_regression_func(X_input, y_input, folds, current_time, intercept: bool, hyperopt: bool, max_iter: int, verbose, solver):
     # Stratifed K-Fold
     skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
     split = skf.split(X_input, y_input)
@@ -301,6 +306,7 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
         # Separamos los datos en entrenamiento y validación
         X_train, X_val = X_input.iloc[train_index], X_input.iloc[valid_index]
         y_train, y_val = y_input.iloc[train_index], y_input.iloc[valid_index]
+        print('Datos separados en entrenamiento y validación')
 
         if hyperopt is True:
             print(f'Optimización de hiperparámetros para el fold {fold+1}')
@@ -311,7 +317,7 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
 
                 # Definimos el modelo
                 model = LogisticRegression(random_state=42, penalty='l2', max_iter=max_iter, fit_intercept= intercept, 
-                                        C=C, solver='lbfgs', n_jobs=-1)
+                                        C=C, solver=solver, verbose=verbose)
 
                 # Entrenamos el modelo
                 model.fit(X_train, y_train)
@@ -333,13 +339,13 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
 
             # Definimos el modelo
             log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=max_iter, fit_intercept = intercept,
-                                        C=best_params['C'], solver='lbfgs', n_jobs=-1)
+                                        C=best_params['C'], solver=solver,verbose=verbose)
             
         else:
             # Definimos el modelo
             print('No se ha realizado la optimización de hiperparámetros')
             log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=max_iter, fit_intercept = intercept, 
-                                           solver='lbfgs', n_jobs=-1)
+                                           solver=solver, verbose=verbose)
 
         # Entrenamos el modelo
         print('Entrenamiento del modelo')
@@ -347,6 +353,7 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
         print('Entrenamiento finalizado')
 
         # Predecimos los datos de validación
+        print('Predicción de los datos de validación')
         y_pred = log_model.predict_proba(X_val)[:, 1]
         print('Predicción finalizada')
 
@@ -370,7 +377,7 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
     print('-'*50)
     print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scores['AMEX']))
 
-logistic_regression_func(X, y, 5, current_time, intercept=True, hyperopt=False, max_iter=100)
+logistic_regression_func(X, y, 5, current_time, intercept=True, hyperopt=False, max_iter=2000, verbose=1, solver='saga') # 'lbfgs'
 
 
 # %%: Regresión logística usando variables Weight of Evidence (WOE) III: Test SAS
