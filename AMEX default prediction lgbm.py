@@ -244,7 +244,7 @@ models = []
 
 # Definimos las listas para guardar las importancias de las variables
 feature_importances = pd.DataFrame()
-feature_importances['feature'] = features
+feature_importances['feature'] = list(X.columns)
 
 # Generamos la fecha para guardar los outpus en el mismo directorio
 current_time = time.strftime('%Y%m%d_%H%M%S')
@@ -336,6 +336,36 @@ feature_importances.to_excel(f'./MODELOS/LGBM_{current_time}/feature_importances
 
 # In[13]: Predicciones
 
+def test_predictions(model_name, threshold, test_df, nfolds=5):
+    # Cargamos datos de test si no están cargados
+    if test_df is None:
+        test_df = pd.read_parquet('./DATASETS/combined_dataset/test_df_oh.parquet')
+        print('Test data loaded')
+
+    # Seleccionamos las variables del modelo
+    if threshold is not None:
+        excluded_features = fe.pimp_feature_selection(0, 'lgbm')
+        print(f'Test data features selected based on PIMP.')
+
+    # Iteramos sobre cada fold para calucular las predicciones de cada modelo
+    for fold in range(nfolds):
+        # Cargamos el modelo
+        model_lgb = lgb.Booster(model_file=f'./MODELOS/LGBM_{model_name}/LGBM_model_{fold}.json')
+        print(f'Model for fold {fold} loaded')
+        # Predecimos sobre test
+        X_test = test_df.drop(columns=['customer_ID']+excluded_features)
+        y_pred_test =  model_lgb.predict(X_test)
+        print(f'Prediction for fold {fold} done')
+        # Creamos un dataframe con las predicciones
+        submission = pd.DataFrame({'customer_ID': test_df['customer_ID'], 'prediction': y_pred_test})
+        # Guardamos el dataframe en un csv
+        submission.to_csv(f'./MODELOS/LGBM_{model_name}/submission_{model_name}_{fold}.csv', index=False)
+        print(f'Submission for fold {fold} done')
+        # Liberamos memoria
+        del X_test, y_pred_test, submission
+        gc.collect()
+
+# test_predictions('20230620_111308', 0, None)
 
 
 # # In[16]: Curva ROC de cada fold
@@ -380,3 +410,4 @@ feature_importances.to_excel(f'./MODELOS/LGBM_{current_time}/feature_importances
 # metric_score = amex_metric(y_true1, y_pred1)
 # print('Gini: ', metric_score)
 # # %%
+# %%
