@@ -426,9 +426,9 @@ def load_datasets(oh:bool):
 def pimp_feature_selection(threshold: float, model: str): # model = 'lgbm' or 'xgb'
     # Read the average Permutation Feature Importance file
     if model == 'xgb':
-        pimp = pd.read_excel('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_20230531_190457/PIMP/FEAT_AVG_IMP.xlsx')
-    # elif model == 'lgbm':
-    #     pimp = pd.read_csv('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/LightGBM_20230531_190457/PIMP/FEAT_AVG_IMP.csv')
+        pimp = pd.read_excel('./MODELOS/XGBoost_20230531_190457/PIMP/FEAT_AVG_IMP.xlsx')
+    elif model == 'lgbm':
+        pimp = pd.read_excel('./MODELOS/LGBM_20230518_151655/PIMP/FEAT_AVG_IMP.xlsx')
 
     # Create a list with the features with a PIMP value greater than the threshold
     excluded_features = pimp[pimp['AVERAGE'] >= threshold]['FEATURE'].to_list()
