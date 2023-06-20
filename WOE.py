@@ -332,9 +332,27 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
 logistic_regression_func(X, y, 5, current_time, intercept=True, hyperopt=False, max_iter=2000, verbose=1, solver='lbfgs') # 'lbfgs'
 
 
-# In[12]: Regresión logística usando variables Weight of Evidence (WOE) III: Test prediction
+# In[12]: Regresión logística usando variables Weight of Evidence (WOE) III: Coeficientes
 
-def test_predictions(model_name, nfolds=5):
+# Creamos un dataframe con los coeficientes de cada variable para cada fold
+coefficients_df = pd.DataFrame()
+coefficients_df['feature'] = coefficients[0]['feature']
+
+# Creamos un bucle para añadir los coeficientes de cada fold al dataframe, añadiendo una columna para cada fold
+for fold in range(5):
+    coefficients_df[f'fold_{fold}'] = coefficients[fold]['coef']
+
+
+# Guardamos el dataframe en un excel
+coefficients_df.to_excel(f'MODELOS/LogReg_{current_time}/LogReg_coefficients_{current_time}.xlsx', index=False)
+
+# Liberamos memoria
+del coefficients_df
+
+
+# In[13]: Regresión logística usando variables Weight of Evidence (WOE) IV: Test prediction
+
+def test_predictions(model_name, sel_feat: bool, nfolds=5):
 
     # Cargamos los datos de test
     test = pd.read_parquet('./DATASETS/combined_dataset/test_combined_dataset.parquet')
@@ -345,6 +363,10 @@ def test_predictions(model_name, nfolds=5):
 
     # Renombramos las variables
     test_binned.columns = [col + '_woe' for col in test_binned.columns]
+
+    if sel_feat is True:
+        # Nos quedamos con las variables seleccionadas
+        test_binned = test_binned[selected_features]
 
     # Creamos un bucle para hacer las predicciones de cada fold
     for fold in range(nfolds):
@@ -366,7 +388,7 @@ def test_predictions(model_name, nfolds=5):
         # Liberamos memoria
         del logreg_model, y_pred, submission
 
-test_predictions('20230620_190228', nfolds=5)
+test_predictions('20230620_190228', True, nfolds=5)
 
 
 # %%: Regresión logística usando variables Weight of Evidence (WOE) III: Test SAS
