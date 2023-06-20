@@ -29,6 +29,9 @@ import optbinning
 # Progress bar
 from tqdm import tqdm
 
+# load/save models
+import pickle
+
 
 # In[2]: Lectura de datos
 # oh=False
@@ -208,64 +211,6 @@ print('Hemos eliminado', len(dropped_features), 'variables con IV <= 0.02')
 # transform_bins = binning_fit.transform(train_df[features], metric="bins")
 
 
-# # In[8]: PRUEBA I - Regresión logística usando variables Weight of Evidence (WOE)
-
-# """Baseline para hacer la regresión logística usando las variables WOE.""" 
-
-# # En primer lugar, definimos X e y
-# X = train_df_binned.drop('target', axis=1)
-# y = train_df_binned['target']
-
-# # Separamos los datos en entrenamiento y validación
-# X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# # Definimos el modelo
-# model = LogisticRegression(random_state=42, max_iter=1000)
-
-# # Entrenamos el modelo
-# model.fit(X_train, y_train)
-
-# # Predecimos los datos de validación
-# y_pred = model.predict_proba(X_val)[:, 1]
-
-# # pred_train = 1/(1+np.exp(-model.predict(X_train)))
-# # pred_train_df = pd.DataFrame(pred_train, columns=['prediction'])
-
-# # y_val_df = pd.DataFrame(y_val, columns=['target'])
-
-# # Calculamos la métrica
-# metric = amex_metric_np(y_pred, y_val.to_numpy())
-
-# print(f'AMEX metric: {metric}')
-
-
-# # In[9]: PRUEBA II - Regresión logística usando variables Weight of Evidence (WOE) 
-
-# # Vamos a calcular la regresión logística usando las variables WoE. No emplearemos las variables con IV <= 0.02
-
-# # En primer lugar, definimos X e y. Tenemos que añadir primero '_woe' a las variables seleccionadas
-# selected_features = [col + '_woe' for col in selected_features]
-# X = train_df_binned[selected_features]
-# y = train_df_binned['target']
-
-# # Separamos los datos en entrenamiento y validación
-# X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# # Definimos el modelo
-# model = LogisticRegression(random_state=42)
-
-# # Entrenamos el modelo
-# model.fit(X_train, y_train)
-
-# # Predecimos los datos de validación
-# y_pred = model.predict_proba(X_val)[:, 1]
-
-# # Calculamos la métrica
-# metric = amex_metric_np(y_pred, y_val.to_numpy())
-
-# print(f'AMEX metric: {metric}')
-
-
 # In[10]: Regresión logística usando variables Weight of Evidence (WOE) I: Separación de datos
 
 # Vamos a calcular la regresión logística usando las variables WoE. No emplearemos las variables con IV <= 0.02
@@ -275,7 +220,7 @@ selected_features = [col + '_woe' for col in selected_features]
 X = train_df_binned[selected_features]
 y = train_df_binned['target']
 
-del binning_fit, binning_table, optb, train_df_binned
+del binning_fit, binning_table, optb, train_df_binned, train_df
 
 # In[11]: Regresión logística usando variables Weight of Evidence (WOE) II: Cross-validation 
 
@@ -346,11 +291,18 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
             print('No se ha realizado la optimización de hiperparámetros')
             log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=max_iter, fit_intercept = intercept, 
                                            solver=solver, verbose=verbose)
+            
+        # Tiempo de entrenamiento (start)
+        start = time.time()
 
         # Entrenamos el modelo
         print('Entrenamiento del modelo')
         log_model.fit(X_train, y_train)
         print('Entrenamiento finalizado')
+
+        # Tiempo de entrenamiento (end)
+        end = time.time()
+        print('Tiempo de entrenamiento:', end - start)
 
         # Predecimos los datos de validación
         print('Predicción de los datos de validación')
@@ -377,7 +329,44 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
     print('-'*50)
     print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scores['AMEX']))
 
-logistic_regression_func(X, y, 5, current_time, intercept=True, hyperopt=False, max_iter=2000, verbose=1, solver='saga') # 'lbfgs'
+logistic_regression_func(X, y, 5, current_time, intercept=True, hyperopt=False, max_iter=2000, verbose=1, solver='lbfgs') # 'lbfgs'
+
+
+# In[12]: Regresión logística usando variables Weight of Evidence (WOE) III: Test prediction
+
+def test_predictions(model_name, nfolds=5):
+
+    # Cargamos los datos de test
+    test = pd.read_parquet('./DATASETS/combined_dataset/test_combined_dataset.parquet')
+
+    # Binning y WOE
+    # Hacemos el binning de los datos de test
+    test_binned = binning_fit.transform(test[features])
+
+    # Renombramos las variables
+    test_binned.columns = [col + '_woe' for col in test_binned.columns]
+
+    # Creamos un bucle para hacer las predicciones de cada fold
+    for fold in range(nfolds):
+        # Cargamos el modelo
+        logreg_model = pickle.load(open(f'MODELOS/LogReg_{model_name}/LogReg_model_{fold}.pkl', 'rb'))
+        print(f'Modelo {fold} cargado')
+
+        # Hacemos logreg_model predicciones
+        y_pred = logreg_model.predict_proba(test_binned)[:, 1]
+        print(f'Predicciones del modelo {fold} realizadas')
+
+        # Creamos un dataframe con las predicciones
+        submission = pd.DataFrame({'customer_ID': test['customer_ID'], 'prediction': y_pred})
+
+        # Guardamos el dataframe en un csv
+        submission.to_csv(f'MODELOS/LogReg_{model_name}/LogReg_lastobs_{model_name}_{fold}.csv', index=False)
+        print(f'Predicciones del modelo {fold} guardadas')
+
+        # Liberamos memoria
+        del logreg_model, y_pred, submission
+
+test_predictions('20230620_190228', nfolds=5)
 
 
 # %%: Regresión logística usando variables Weight of Evidence (WOE) III: Test SAS
