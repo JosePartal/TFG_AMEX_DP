@@ -281,6 +281,8 @@ def test_predictions(model_name, nfolds=5):
 
     # Cargamos los datos de test
     test = pd.read_parquet('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/amex-default-prediction/parquet_ds_integer_dtypes/test.parquet')
+    test = test.groupby('customer_ID').tail(1).set_index('customer_ID') # Última observación
+    test = test.reset_index()
 
     # Binning y WOE
     # Hacemos el binning de los datos de test
@@ -288,10 +290,6 @@ def test_predictions(model_name, nfolds=5):
 
     # Renombramos las variables
     test_binned.columns = [col + '_woe' for col in test_binned.columns]
-
-    # Liberamos memoria
-    del test
-    gc.collect()
 
     # Creamos un bucle para hacer las predicciones de cada fold
     for fold in range(nfolds):
@@ -311,8 +309,7 @@ def test_predictions(model_name, nfolds=5):
         print(f'Predicciones del modelo {fold} guardadas')
 
         # Liberamos memoria
-        del logreg_model, y_pred, predictions
-    gc.collect()
+        del logreg_model, y_pred, submission
 
 test_predictions('20230620_172139', nfolds=5)
 
