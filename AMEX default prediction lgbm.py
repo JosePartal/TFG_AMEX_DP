@@ -345,7 +345,11 @@ def test_predictions(model_name, threshold, test_df, nfolds=5):
     # Seleccionamos las variables del modelo
     if threshold is not None:
         excluded_features = fe.pimp_feature_selection(0, 'lgbm')
+        X_test = test_df.drop(columns=['customer_ID']+excluded_features)
         print(f'Test data features selected based on PIMP.')
+    else:
+        X_test = test_df.drop(columns=['customer_ID'])
+        print(f'Test data features not selected based on PIMP.')
 
     # Iteramos sobre cada fold para calucular las predicciones de cada modelo
     for fold in range(nfolds):
@@ -353,7 +357,6 @@ def test_predictions(model_name, threshold, test_df, nfolds=5):
         model_lgb = lgb.Booster(model_file=f'./MODELOS/LGBM_{model_name}/LGBM_model_{fold}.json')
         print(f'Model for fold {fold} loaded')
         # Predecimos sobre test
-        X_test = test_df.drop(columns=['customer_ID']+excluded_features)
         y_pred_test =  model_lgb.predict(X_test)
         print(f'Prediction for fold {fold} done')
         # Creamos un dataframe con las predicciones
@@ -362,7 +365,7 @@ def test_predictions(model_name, threshold, test_df, nfolds=5):
         submission.to_csv(f'./MODELOS/LGBM_{model_name}/submission_{model_name}_{fold}.csv', index=False)
         print(f'Submission for fold {fold} done')
         # Liberamos memoria
-        del X_test, y_pred_test, submission
+        del y_pred_test, submission
         gc.collect()
 
 # test_predictions('20230620_111308', 0, None)
