@@ -110,7 +110,7 @@ def amex_metric_mod(y_true, y_pred):
 train_df_oh = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
 
 # # Selección de variables basada en PIMP
-# train_df_oh = fe.select_model_features(train_df_oh, 0, 'lgbm')
+train_df_oh = fe.select_model_features(train_df_oh, 0, 'lgbm')
 
 # Definimos X e y
 X = train_df_oh.drop(columns = ['target', 'customer_ID']) 
@@ -183,31 +183,44 @@ gc.collect()
 #     'seed': SEED,
 # }
 
-LGBM_params = {
-    'objective': 'binary',
-    'metric': 'binary_logloss',
-    'boosting': 'dart',
-    'max_depth' : 6,
-    'num_leaves' : 64,
-    'learning_rate' : 0.3,
-    'bagging_freq': 5,
-    'bagging_fraction' : 0.75,
-    'feature_fraction' : 0.1,
-    'min_data_in_leaf': 256,
-    'max_bin': 50,
-    'min_data_in_bin': 256,
-    # 'min_sum_heassian_in_leaf': 10,
-    'tree_learner': 'voting',
-    'boost_from_average': 'false',
-    'lambda_l1' : 0.1,
-    'lambda_l2' : 30,
-    'num_threads': -1,
-    'force_row_wise' : True,
-    'verbosity' : 0,
-    'device' : 'gpu',
-    'min_gain_to_split' : 0.001,
-    'early_stopping_round' : 100,
-    }
+# LGBM_params = {
+#     'objective': 'binary',
+#     'metric': 'binary_logloss',
+#     'boosting': 'dart',
+#     'max_depth' : 6,
+#     'num_leaves' : 64,
+#     'learning_rate' : 0.3,
+#     'bagging_freq': 5,
+#     'bagging_fraction' : 0.75,
+#     'feature_fraction' : 0.1,
+#     'min_data_in_leaf': 256,
+#     'max_bin': 50,
+#     'min_data_in_bin': 256,
+#     # 'min_sum_heassian_in_leaf': 10,
+#     'tree_learner': 'voting',
+#     'boost_from_average': 'false',
+#     'lambda_l1' : 0.1,
+#     'lambda_l2' : 30,
+#     'num_threads': -1,
+#     'force_row_wise' : True,
+#     'verbosity' : 0,
+#     'device' : 'gpu',
+#     'min_gain_to_split' : 0.001,
+#     'early_stopping_round' : 100,
+#     }
+
+LGBM_params = {'boosting_type': 'gbdt',
+            'n_estimators': 2500,
+            'num_leaves': 50,
+            'learning_rate': 0.05,
+            'colsample_bytree': 0.7,
+            'min_data_in_leaf': 1500,
+            'max_bins': 63,
+            # 'reg_alpha': 2,
+            'objective': 'binary',
+            'metric': 'binary_logloss',
+            'force_col_wise': True,
+            'random_state': 42}
 
 
 # In[7]: Hyperparameter tuning
@@ -257,7 +270,7 @@ for fold, (train_index, valid_index) in enumerate(split):
     start = time.time()
 
     # Entrenamos el modelo para el fold actual
-    model_lgb = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=3000, valid_sets=[lgb_train, lgb_valid],
+    model_lgb = lgb.train(params=LGBM_params, train_set=lgb_train, num_boost_round=2500, valid_sets=[lgb_train, lgb_valid],
                             callbacks=[lgb.log_evaluation(period=100), lgb.early_stopping(100)])
     
     # Medimos el tiempo de entrenamiento de cada fold (end)
@@ -282,6 +295,18 @@ for fold, (train_index, valid_index) in enumerate(split):
     print(f'Métrica de Kaggle para el fold {fold}:', AMEX_score)
     scores['AMEX'].append(AMEX_score)
 
+    # # Predicciones sobre el conjunto de test
+    # X_test = test.drop(columns=['customer_ID'])
+    # y_pred_test = model_lgb.predict(X_test)
+    # print(f'Prediction for fold {fold} done')
+
+    # # Creamos un dataframe con las predicciones
+    # submission = pd.DataFrame({'customer_ID': test['customer_ID'], 'prediction': y_pred_test})
+
+    # # Guardamos el dataframe en un csv
+    # submission.to_csv(f'C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/LGBM_{current_time}/submission_lastob_lgbm_{fold}.csv', index=False)
+    # print(f'Submission for fold {fold} done')
+
     # Libera memoria
     del X_train, X_valid, y_train, y_valid, lgb_train, lgb_valid
     gc.collect()
@@ -302,11 +327,11 @@ plt.figure(figsize=(10, 30))
 sns.barplot(x='average', y='feature', data=feature_importances.head(150))
 plt.title('150 variables más importantes')
 plt.tight_layout()
-plt.savefig(f'feature_importances_{current_time}.png')
+plt.savefig(f'./MODELOS/LGBM_{current_time}/feature_importances_{current_time}.png')
 plt.show()
 
 # Guardamos el dataframe de importancia de variables en un archivo excel
-feature_importances.to_excel(f'feature_importances_{current_time}.xlsx', index=False)
+feature_importances.to_excel(f'./MODELOS/LGBM_{current_time}/feature_importances_{current_time}.xlsx', index=False)
 
 
 # In[13]: Predicciones
