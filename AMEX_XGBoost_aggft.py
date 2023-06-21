@@ -24,6 +24,9 @@ import feature_engineering as fe
 # Librería para monitorizar bucles
 from tqdm import tqdm
 
+# Optimización de hiperparámetros
+import optuna
+
 
 # In[2]: Lectura de datos
 oh = True
@@ -367,7 +370,7 @@ xgb_model_func(X_0_out, y, 5)
 importances_df, zero_importance_features = fi_func(importances, current_time, X_0_out)
 
 
-# In[16]: Test predictions (pruebas) --> Agregar modelos para hacer el ensemble y evitar overfitting
+# In[15]: Test predictions (pruebas) --> Agregar modelos para hacer el ensemble y evitar overfitting
 
 # Función para recorrer los distintos modelos y hacer predicciones sobre test
 def test_predictions(model_name, threshold, test_df, nfolds=5):
@@ -402,4 +405,80 @@ def test_predictions(model_name, threshold, test_df, nfolds=5):
 
 # test_predictions('20230531_190457', None, None)
 test_predictions('20230610_004736', 0, None)
-# %%
+
+
+# In[16]: Optimización de hiperparámetros con Optuna
+
+# Diccionario para guardar los scores de cada fold
+scores = {'AMEX': []} 
+
+# Función para optimizar los hiperparámetros de XGBoost con Optuna
+def objective(trial):
+    # Definimos los hiperparámetros a optimizar
+    params = {
+        'max_depth': trial.suggest_int('max_depth', 3, 10),
+        'learning_rate': trial.suggest_loguniform('learning_rate', 0.01, 0.5),
+        'subsample': trial.suggest_discrete_uniform('subsample', 0.6, 1, 0.1),
+        'colsample_bytree': trial.suggest_discrete_uniform('colsample_bytree', 0.6, 1, 0.1),
+        'eval_metric':'logloss',
+        'objective':'binary:logistic',
+        'tree_method':'gpu_hist',
+        'predictor':'gpu_predictor',
+        'random_state':42 # default n_threads = -1 (max available)
+    }
+
+    # Vamos a hacer un stratified k-fold cross validation con 5 folds
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    split = skf.split(X, y)
+
+    # Creamos el bucle para hacer el cross validation
+    for fold, (train_index, valid_index) in enumerate(split):
+
+        # Mensajes informativos
+        print('-'*50)
+        print('Fold:',fold+1)
+        print( 'Train size:', len(train_index), 'Validation size:', len(valid_index))
+        print('-'*50)
+
+        # Separamos los datos en entrenamiento y validación
+        X_train, X_valid = X.iloc[train_index], X.iloc[valid_index]
+        y_train, y_valid = y.iloc[train_index], y.iloc[valid_index]
+
+        # Creamos el dataset de entrenamiento indicando las variables categóricas
+        dtrain = xgb.DMatrix(X_train, label=y_train, feature_names=X_train.columns, nthread=-1, enable_categorical=True)
+        dvalid = xgb.DMatrix(X_valid, label=y_valid, feature_names=X_valid.columns, nthread=-1, enable_categorical=True)
+
+        # Entrenamos el modelo para el fold actual
+        xgb_model = xgb.train(params, dtrain, num_boost_round=2500, evals=[(dtrain,'train'),(dvalid,'test')],
+                                early_stopping_rounds=50, verbose_eval=50)
+        
+        # Predecimos sobre el conjunto de validación
+        y_pred = xgb_model.predict(dvalid)
+
+        # Calculamos el score para el fold actual con la métrica customizada
+        AMEX_score = amex_metric_mod(y_valid.values, y_pred)
+        print(f'Métrica de Kaggle para el fold {fold}:', AMEX_score)
+        scores['AMEX'].append(AMEX_score)
+
+        # Liberamos memoria
+        del X_train, X_valid, y_train, y_valid, dtrain, dvalid
+        gc.collect()
+
+    # Mostramos los resultados
+    print('-'*50)
+    print('Valor medio de la métrica de Kaggle para todos los folds:', np.mean(scores['AMEX']))
+
+    return np.mean(scores['AMEX'])
+
+# Optimizamos los hiperparámetros
+study = optuna.create_study(direction='maximize')
+study.optimize(objective, n_trials=50, show_progress_bar=True, gc_after_trial=True)
+
+# Mostramos los resultados
+print('Valor óptimo de la métrica:', study.best_value)
+print('Mejores hiperparámetros:', study.best_params)
+
+# Guardamos los resultados en un excel
+results = study.trials_dataframe()
+results.to_excel('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_optuna/results.xlsx', index=True)
+
