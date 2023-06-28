@@ -220,7 +220,7 @@ selected_features = [col + '_woe' for col in selected_features]
 X = train_df_binned[selected_features]
 y = train_df_binned['target']
 
-del binning_fit, binning_table, optb, train_df_binned, train_df
+del binning_table, optb, train_df_binned, train_df
 
 # In[11]: Regresión logística usando variables Weight of Evidence (WOE) II: Cross-validation 
 
@@ -290,7 +290,7 @@ def logistic_regression_func(X_input, y_input, folds, current_time, intercept: b
             # Definimos el modelo
             print('No se ha realizado la optimización de hiperparámetros')
             log_model = LogisticRegression(random_state=42, penalty='l2', max_iter=max_iter, fit_intercept = intercept, 
-                                           solver=solver, verbose=verbose)
+                                           solver=solver, verbose=verbose, C=0.002848035868435802)
             
         # Tiempo de entrenamiento (start)
         start = time.time()
@@ -388,7 +388,7 @@ def test_predictions(model_name, sel_feat: bool, nfolds=5):
         # Liberamos memoria
         del logreg_model, y_pred, submission
 
-test_predictions('20230620_190228', True, nfolds=5)
+test_predictions('20230628_231843', True, nfolds=5)
 
 
 # %%: Regresión logística usando variables Weight of Evidence (WOE) III: Test SAS
