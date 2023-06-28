@@ -110,7 +110,7 @@ def amex_metric_mod(y_true, y_pred):
 train_df_oh = train.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
 
 # # Selección de variables basada en PIMP
-train_df_oh = fe.select_model_features(train_df_oh, 0, 'lgbm')
+train_df_oh = fe.select_model_features(train_df_oh, -0.000001, 'lgbm')
 
 # Definimos X e y
 X = train_df_oh.drop(columns = ['target', 'customer_ID']) 
@@ -344,12 +344,13 @@ def test_predictions(model_name, threshold, test_df, nfolds=5):
 
     # Seleccionamos las variables del modelo
     if threshold is not None:
-        excluded_features = fe.pimp_feature_selection(0, 'lgbm')
-        X_test = test_df.drop(columns=['customer_ID']+excluded_features)
+        test_df = fe.select_model_features(test_df, threshold, 'lgbm')
         print(f'Test data features selected based on PIMP.')
     else:
-        X_test = test_df.drop(columns=['customer_ID'])
+        test_df = test_df.drop(columns=['customer_ID'])
         print(f'Test data features not selected based on PIMP.')
+
+    X_test = test_df.drop(columns=['customer_ID'])
 
     # Iteramos sobre cada fold para calucular las predicciones de cada modelo
     for fold in range(nfolds):
