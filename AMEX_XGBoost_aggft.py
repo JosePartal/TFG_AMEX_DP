@@ -123,7 +123,7 @@ gc.collect()
 # Primero añadimos la variable target a train_df_oh
 train_df_oh_raw = train_df_oh.merge(train_labels, left_on='customer_ID', right_on='customer_ID')
 
-# train_df_oh_raw = fe.select_model_features(train_df_oh_raw, 0, 'xgb')
+train_df_oh_raw = fe.select_model_features(train_df_oh_raw, 0, 'xgb')
 
 # # # Transform train_df_oh_raw inf values to zero
 # train_df_oh_raw = train_df_oh_raw.replace([np.inf, -np.inf], 0)
@@ -404,7 +404,7 @@ def test_predictions(model_name, threshold, test_df, nfolds=5):
         gc.collect()
 
 # test_predictions('20230531_190457', None, None)
-test_predictions('20230610_004736', 0, None)
+# test_predictions('20230610_004736', 0, None)
 
 
 # In[16]: Optimización de hiperparámetros con Optuna
@@ -421,6 +421,7 @@ def objective(trial):
         'subsample': trial.suggest_discrete_uniform('subsample', 0.6, 1, 0.1),
         'colsample_bytree': trial.suggest_discrete_uniform('colsample_bytree', 0.6, 1, 0.1),
         'eval_metric':'logloss',
+        'verbosity':0,
         'objective':'binary:logistic',
         'tree_method':'gpu_hist',
         'predictor':'gpu_predictor',
@@ -433,12 +434,6 @@ def objective(trial):
 
     # Creamos el bucle para hacer el cross validation
     for fold, (train_index, valid_index) in enumerate(split):
-
-        # Mensajes informativos
-        print('-'*50)
-        print('Fold:',fold+1)
-        print( 'Train size:', len(train_index), 'Validation size:', len(valid_index))
-        print('-'*50)
 
         # Separamos los datos en entrenamiento y validación
         X_train, X_valid = X.iloc[train_index], X.iloc[valid_index]
@@ -457,7 +452,6 @@ def objective(trial):
 
         # Calculamos el score para el fold actual con la métrica customizada
         AMEX_score = amex_metric_mod(y_valid.values, y_pred)
-        print(f'Métrica de Kaggle para el fold {fold}:', AMEX_score)
         scores['AMEX'].append(AMEX_score)
 
         # Liberamos memoria
@@ -472,7 +466,7 @@ def objective(trial):
 
 # Optimizamos los hiperparámetros
 study = optuna.create_study(direction='maximize')
-study.optimize(objective, n_trials=50, show_progress_bar=True, gc_after_trial=True)
+study.optimize(objective, n_trials=20, show_progress_bar=True, gc_after_trial=True)
 
 # Mostramos los resultados
 print('Valor óptimo de la métrica:', study.best_value)
@@ -482,3 +476,5 @@ print('Mejores hiperparámetros:', study.best_params)
 results = study.trials_dataframe()
 results.to_excel('C:/Users/Jose/Documents/UNIVERSIDAD/TFG/MATEMATICAS/PYTHON/MODELOS/XGBoost_optuna/results.xlsx', index=True)
 
+
+# %%
